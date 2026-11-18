@@ -144,7 +144,7 @@ Artifacts:
   workspace/
 ```
 
-The control plane lives in `.mesh/mesh.db` (SQLite, WAL mode). Add `.mesh/` to `.gitignore`.
+The control plane lives in `.mesh/mesh.db` (SQLite, WAL mode). Add `.mesh/` to `.gitignore`. If you delete `.mesh/` while worktree runs exist, also run `git worktree prune`.
 
 ## MCP
 
