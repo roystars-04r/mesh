@@ -1,0 +1,70 @@
+{
+  "agents": {
+    "claude": {
+      "command": "claude",
+      "capabilities": ["coding", "refactor", "frontend", "long-task"],
+      "args": ["-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits"],
+      "prompt": "arg",
+      "timeoutSec": 1800
+    },
+    "codex": {
+      "command": "codex",
+      "capabilities": ["review", "debug", "tests", "backend"],
+      "args": ["exec", "--json", "--sandbox", "workspace-write", "--skip-git-repo-check", "-C", "{{workspace}}", "-"],
+      "prompt": "stdin",
+      "timeoutSec": 1800
+    },
+    "gemini": {
+      "command": "gemini",
+      "capabilities": ["research", "long-context", "docs", "multimodal"],
+      "args": ["-p", "{{prompt}}", "--output-format", "stream-json", "--approval-mode", "auto_edit", "--skip-trust"],
+      "prompt": "arg-template",
+      "timeoutSec": 1800
+    },
+    "dsh": {
+      "command": "dsh",
+      "capabilities": ["verify", "tools", "execution"],
+      "args": ["headless", "--json", "--permission-mode", "workspace-write", "{{prompt}}"],
+      "prompt": "arg-template",
+      "timeoutSec": 1800
+    }
+  },
+  "workflows": {
+    "implement-review": {
+      "steps": [
+        {
+          "id": "implement",
+          "agent": "claude",
+          "promptFile": "prompts/implement.md"
+        },
+        {
+          "id": "review",
+          "agent": "codex",
+          "needs": ["implement"],
+          "promptFile": "prompts/review.md"
+        }
+      ]
+    },
+    "implement-review-verify": {
+      "steps": [
+        {
+          "id": "implement",
+          "agent": "claude",
+          "promptFile": "prompts/implement.md"
+        },
+        {
+          "id": "review",
+          "agent": "codex",
+          "needs": ["implement"],
+          "promptFile": "prompts/review.md"
+        },
+        {
+          "id": "verify",
+          "agent": "dsh",
+          "needs": ["review"],
+          "promptFile": "prompts/verify.md"
+        }
+      ]
+    }
+  }
+}
