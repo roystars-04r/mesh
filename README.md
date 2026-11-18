@@ -17,7 +17,7 @@ Each CLI is strong at different work:
 | Agent | Best at | Adapter |
 |---|---|---|
 | Claude Code | implementation, refactors, frontend, long tasks | `claude -p --output-format stream-json` |
-| Codex | review, debugging, tests, backend | `codex exec --json --sandbox workspace-write` |
+| Codex | review, debugging, tests, backend | `codex exec --json --sandbox workspace-write --skip-git-repo-check` |
 | Gemini CLI | research, long context, docs, multimodal | `gemini -p --output-format stream-json` |
 | DSH | verification, tool use, execution | `dsh headless --json` |
 
@@ -220,6 +220,8 @@ Use mesh_run with goal "fix the failing pagination test", then poll mesh_status.
 - Agent CLIs may still ask for approval or need authentication. Mesh does not bypass their permission systems.
 
 If a CLI blocks on an interactive prompt, run its one-time login/trust flow first, then re-run Mesh with `--verbose` to see where it stopped.
+
+Codex needs a writable `CODEX_HOME` (usually `~/.codex`). In a heavily sandboxed agent environment it may fail with `failed to initialize in-process app-server client: Operation not permitted`; run Mesh from a normal terminal or point `CODEX_HOME` at a writable profile.
 
 ## Current limitations
 

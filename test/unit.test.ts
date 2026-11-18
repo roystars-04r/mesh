@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -108,6 +109,40 @@ test("startRun executes a workflow with the mock agent", async () => {
     const output = readFileSync(join(result.runDir, "steps", "only.md"), "utf8");
     assert.match(output, /mock agent completed/);
     assert.ok(readFileSync(join(result.runDir, "artifacts", "diff-only.patch"), "utf8").includes("mesh-mock-change.txt"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("startRun uses a git worktree and captures untracked changes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "mesh-git-"));
+  try {
+    const git = (args: string[]) => {
+      const result = spawnSync("git", args, { cwd: dir, encoding: "utf8" });
+      assert.equal(result.status, 0, `${args.join(" ")}: ${result.stderr}`);
+      return result;
+    };
+    git(["init", "-q"]);
+    writeFileSync(
+      join(dir, "mesh.json"),
+      JSON.stringify({
+        agents: { mock: { command: "node", args: [], capabilities: ["test"], prompt: "arg" } },
+        workflows: { one: { steps: [{ id: "only", agent: "mock", prompt: "do {{goal}}" }] } },
+      }),
+      "utf8",
+    );
+    git(["add", "mesh.json"]);
+    git(["-c", "user.name=Mesh", "-c", "user.email=mesh@local", "commit", "-q", "-m", "init"]);
+    const result = await startRun({
+      goal: "worktree",
+      workflow: "one",
+      workspace: dir,
+      dryRun: true,
+      quiet: true,
+    });
+    assert.equal(result.status, "completed");
+    assert.ok(existsSync(join(result.runDir, "workspace", ".git")));
+    assert.match(readFileSync(join(result.runDir, "artifacts", "diff-only.patch"), "utf8"), /mesh-mock-change\.txt/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

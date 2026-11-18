@@ -65,12 +65,9 @@ function prepareWorkspace(source: string, runDir: string): PreparedWorkspace {
 
 function collectDiff(prepared: PreparedWorkspace): string {
   if (prepared.mode === "git") {
-    const head = git(["rev-parse", "HEAD"], prepared.path);
-    const current = head.stdout.trim();
-    const diff =
-      prepared.initialHead && current !== prepared.initialHead
-        ? git(["diff", prepared.initialHead, "HEAD"], prepared.path)
-        : git(["diff", "HEAD"], prepared.path);
+    git(["add", "-A"], prepared.path);
+    const base = prepared.initialHead || "HEAD";
+    const diff = git(["diff", "--cached", base], prepared.path);
     return truncate(diff.stdout, DIFF_LIMIT);
   }
   if (!prepared.baseline) return "";
