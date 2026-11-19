@@ -3,6 +3,7 @@ export type PromptMode = "arg" | "stdin" | "arg-template" | "none";
 export interface AgentConfig {
   command: string;
   args?: string[];
+  versionArgs?: string[];
   capabilities: string[];
   prompt: PromptMode;
   timeoutSec?: number;

@@ -43,13 +43,13 @@ export function doctor(workspace: string): DoctorRow[] {
   }
 
   for (const [id, agent] of Object.entries(config.agents)) {
-    const result = runCommand(agent.command, ["--version"], root, 8_000);
+    const result = runCommand(agent.command, agent.versionArgs ?? ["--version"], root, agent.versionArgs ? 60_000 : 15_000);
     const output = `${result.stdout}\n${result.stderr}`.trim().split("\n")[0] ?? "";
-    const found = result.status === 0 || Boolean(output);
+    const ok = result.status === 0;
     rows.push({
       name: id,
-      ok: found,
-      detail: found ? `${agent.command}  ${output}` : `${agent.command} not found or not runnable`,
+      ok,
+      detail: ok ? `${agent.command}  ${output}` : `${agent.command} failed: ${output || "no output"}`,
     });
   }
   return rows;

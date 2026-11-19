@@ -19,7 +19,7 @@ Each CLI is strong at different work:
 | Claude Code | implementation, refactors, frontend, long tasks | `claude -p --output-format stream-json` |
 | Codex | review, debugging, tests, backend | `codex exec --json --sandbox workspace-write --skip-git-repo-check` |
 | Gemini CLI | research, long context, docs, multimodal | `gemini -p --output-format stream-json` |
-| DSH | verification, tool use, execution | `dsh headless --json` |
+| DSH | verification, tool use, execution | `npm exec --yes --package=@deepseek-ai/dsh -- dsh headless --json` |
 
 Mesh uses those strengths in sequence instead of asking one agent to do everything.
 
@@ -174,6 +174,8 @@ Use mesh_run with goal "fix the failing pagination test", then poll mesh_status.
 ## Configuration
 
 `mesh.json` has two top-level objects: `agents` and `workflows`.
+
+`dsh` is launched through npm (`npm exec --yes --package=@deepseek-ai/dsh -- dsh`) so it works even when the package is only installed in the npm/npx cache. Set `versionArgs` when the CLI's version flag is not a plain `--version`, as the DSH entry does.
 
 ### Agent
 
