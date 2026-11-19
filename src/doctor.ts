@@ -1,7 +1,34 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadConfig, configPath } from "./config.ts";
 import { runCommand } from "./util.ts";
+
+function geminiAuthStatus(): { ok: boolean; detail: string } {
+  const credentials = join(homedir(), ".gemini", "oauth_creds.json");
+  if (existsSync(credentials)) {
+    try {
+      const parsed = JSON.parse(readFileSync(credentials, "utf8")) as Record<string, unknown>;
+      const hasRefresh = typeof parsed.refresh_token === "string" && parsed.refresh_token.length > 0;
+      const hasAccess = typeof parsed.access_token === "string" && parsed.access_token.length > 0;
+      const expiry = typeof parsed.expiry_date === "number" ? parsed.expiry_date : null;
+      if (hasRefresh || hasAccess) {
+        const expired = expiry !== null && expiry < Date.now();
+        const expiryText = expiry === null ? "" : `; access token ${expired ? "expired" : "valid until"} ${new Date(expiry).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+        return {
+          ok: true,
+          detail: `credentials present (${hasRefresh ? "refresh token" : "access token only"}${expiryText})`,
+        };
+      }
+    } catch {
+      return { ok: false, detail: "oauth_creds.json is unreadable" };
+    }
+  }
+  if (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) {
+    return { ok: true, detail: "API key present in environment" };
+  }
+  return { ok: false, detail: "not logged in; run `gemini` and choose Login with Google" };
+}
 
 export interface DoctorRow {
   name: string;
@@ -40,6 +67,11 @@ export function doctor(workspace: string): DoctorRow[] {
   } catch (error) {
     rows.push({ name: "config", ok: false, detail: String(error instanceof Error ? error.message : error) });
     return rows;
+  }
+
+  if (config.agents.gemini) {
+    const auth = geminiAuthStatus();
+    rows.push({ name: "gemini-login", ok: auth.ok, detail: auth.detail });
   }
 
   for (const [id, agent] of Object.entries(config.agents)) {
