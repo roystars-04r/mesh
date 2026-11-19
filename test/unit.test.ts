@@ -46,6 +46,20 @@ test("normalizeEvent extracts Claude assistant and result text", () => {
   assert.equal(result.text, "done");
 });
 
+test("normalizeEvent extracts Antigravity deltas and result text", () => {
+  const delta = normalizeEvent({
+    event: "step_update",
+    step_update: { text_delta: "OK" },
+  });
+  assert.equal(delta.text, "OK");
+
+  const result = normalizeEvent({
+    event: "result",
+    result: { status: "SUCCESS", response: "done\n" },
+  });
+  assert.equal(result.text, "done\n");
+});
+
 test("MeshDb persists runs, steps, and artifacts", () => {
   const dir = mkdtempSync(join(tmpdir(), "mesh-db-"));
   try {

@@ -37,8 +37,17 @@ export function normalizeEvent(obj: Record<string, unknown>): AgentEvent {
         .filter(Boolean)
         .join("\n");
     }
+  } else if (type === "step_update") {
+    const update = obj.step_update as Record<string, unknown> | undefined;
+    if (update && typeof update.text_delta === "string") text = update.text_delta;
   } else if (type === "result") {
-    text = String(obj.result ?? obj.response ?? obj.output ?? "");
+    const result = obj.result;
+    if (typeof result === "string") {
+      text = result;
+    } else if (result && typeof result === "object") {
+      const record = result as Record<string, unknown>;
+      text = String(record.response ?? record.result ?? record.output ?? "");
+    }
   } else if (type === "item.completed") {
     const item = obj.item as Record<string, unknown> | undefined;
     if (item?.type === "agent_message") text = String(item.text ?? item.message ?? "");

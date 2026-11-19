@@ -40,8 +40,8 @@
       "prompt": "stdin",
       "timeoutSec": 1800
     },
-    "gemini": {
-      "command": "gemini",
+    "antigravity": {
+      "command": "agy",
       "capabilities": [
         "research",
         "long-context",
@@ -53,9 +53,8 @@
         "{{prompt}}",
         "--output-format",
         "stream-json",
-        "--approval-mode",
-        "auto_edit",
-        "--skip-trust"
+        "--mode",
+        "accept-edits"
       ],
       "prompt": "arg-template",
       "timeoutSec": 1800

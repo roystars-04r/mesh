@@ -2,7 +2,7 @@
 
 Mesh is a local orchestrator for coding agents you already have installed. It routes a goal through a small workflow, gives each agent a clean workspace, and passes structured artifacts between steps.
 
-It is **not** a marketplace, a chat room, or a new agent runtime. The agents stay Claude Code, Codex, Gemini CLI, and DSH; Mesh decides who does what and keeps the handoff inspectable.
+It is **not** a marketplace, a chat room, or a new agent runtime. The agents stay Claude Code, Codex, Antigravity CLI, and DSH; Mesh decides who does what and keeps the handoff inspectable.
 
 ```
 goal ──► implement (Claude Code) ──► review (Codex) ──► verify (DSH, optional)
@@ -18,7 +18,7 @@ Each CLI is strong at different work:
 |---|---|---|
 | Claude Code | implementation, refactors, frontend, long tasks | `claude -p --output-format stream-json` |
 | Codex | review, debugging, tests, backend | `codex exec --json --sandbox workspace-write --skip-git-repo-check` |
-| Gemini CLI | research, long context, docs, multimodal | `gemini -p --output-format stream-json` |
+| Antigravity | research, long context, docs, multimodal | `agy -p --output-format stream-json --mode accept-edits` |
 | DSH | verification, tool use, execution | `npm exec --yes --package=@deepseek-ai/dsh -- dsh headless --json` |
 
 Mesh uses those strengths in sequence instead of asking one agent to do everything.
@@ -29,7 +29,7 @@ Mesh uses those strengths in sequence instead of asking one agent to do everythi
 - At least one agent CLI on `PATH`
 - Git (optional, but recommended; it enables isolated worktrees and cleaner diffs)
 
-Checked locally with: `claude 2.1.325`, `codex 0.164.0`, `gemini 0.68.0`, `dsh 0.2.2-rc.1`.
+Checked locally with: `claude 2.1.325`, `codex 0.164.0`, `agy 1.5.5`, `dsh 0.2.2-rc.1`.
 
 ## Quick start
 
@@ -163,7 +163,7 @@ Register it with Claude Code:
 claude mcp add mesh -- node /path/to/mesh/src/cli.ts mcp
 ```
 
-For Codex, add a stdio MCP server entry pointing at the same command. For Gemini CLI, use its MCP server configuration and the same `node .../src/cli.ts mcp` command.
+For Codex, add a stdio MCP server entry pointing at the same command. For Antigravity, add a stdio MCP server through `agy mcp add` with the same `node .../src/cli.ts mcp` command.
 
 This lets an agent delegate a scoped job to another agent without leaving its own session:
 
@@ -174,6 +174,8 @@ Use mesh_run with goal "fix the failing pagination test", then poll mesh_status.
 ## Configuration
 
 `mesh.json` has two top-level objects: `agents` and `workflows`.
+
+Gemini Code Assist for individuals is no longer supported by Google. Mesh therefore uses Antigravity (`agy`), the migration path Google names. If you have a Gemini API key, you can add a `gemini` agent back manually with `GEMINI_API_KEY` in its environment.
 
 `dsh` is launched through npm (`npm exec --yes --package=@deepseek-ai/dsh -- dsh`) so it works even when the package is only installed in the npm/npx cache. Set `versionArgs` when the CLI's version flag is not a plain `--version`, as the DSH entry does.
 
