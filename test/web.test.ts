@@ -163,10 +163,16 @@ test("web starts runs, streams progress, and cancels", async () => {
     }
     assert.equal(status, "completed");
 
-    const detail = (await (await fetch(`${harness.url}/api/runs/${runId}`)).json()) as {
-      artifacts: Array<{ kind: string }>;
-    };
-    assert.ok(detail.artifacts.some((artifact) => artifact.kind === "summary"));
+    let artifacts: Array<{ kind: string }> = [];
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await fetch(`${harness.url}/api/runs/${runId}`);
+      const payload = (await response.json()) as { artifacts?: Array<{ kind: string }>; error?: string };
+      assert.ok(response.ok, `run detail failed: ${response.status} ${JSON.stringify(payload)}`);
+      artifacts = payload.artifacts ?? [];
+      if (artifacts.some((artifact) => artifact.kind === "summary")) break;
+      await new Promise((done) => setTimeout(done, 50));
+    }
+    assert.ok(artifacts.some((artifact) => artifact.kind === "summary"), `no summary artifact: ${JSON.stringify(artifacts)}`);
 
     const stream = await fetch(`${harness.url}/api/runs/${runId}/stream`);
     const events = await stream.text();

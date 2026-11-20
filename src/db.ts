@@ -12,8 +12,10 @@ export class MeshDb {
     ensureDir(dir);
     this.path = join(dir, "mesh.db");
     this.db = new DatabaseSync(this.path);
-    this.db.exec("PRAGMA journal_mode = WAL;");
+    // Set the busy timeout before any statement that may need a write lock;
+    // a second process (CLI runner + web dashboard) can be writing at the same time.
     this.db.exec("PRAGMA busy_timeout = 5000;");
+    this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS runs (
         id TEXT PRIMARY KEY,
