@@ -177,23 +177,23 @@ export class MeshDb {
   }
 
   getRun(runId: string): RunRecord | undefined {
-    return this.db.prepare("SELECT * FROM runs WHERE id = ?").get(runId) as RunRecord | undefined;
+    return this.db.prepare("SELECT * FROM runs WHERE id = ?").get(runId) as unknown as RunRecord | undefined;
   }
 
   listRuns(limit = 20): RunRecord[] {
-    return this.db.prepare("SELECT * FROM runs ORDER BY created_at DESC LIMIT ?").all(limit) as RunRecord[];
+    return this.db.prepare("SELECT * FROM runs ORDER BY created_at DESC LIMIT ?").all(limit) as unknown as RunRecord[];
   }
 
   getSteps(runId: string): StepRecord[] {
-    return this.db.prepare("SELECT * FROM steps WHERE run_id = ? ORDER BY started_at ASC").all(runId) as StepRecord[];
+    return this.db.prepare("SELECT * FROM steps WHERE run_id = ? ORDER BY started_at ASC").all(runId) as unknown as StepRecord[];
   }
 
   getArtifacts(runId: string): ArtifactRecord[] {
-    return this.db.prepare("SELECT * FROM artifacts WHERE run_id = ? ORDER BY id ASC").all(runId) as ArtifactRecord[];
+    return this.db.prepare("SELECT * FROM artifacts WHERE run_id = ? ORDER BY id ASC").all(runId) as unknown as ArtifactRecord[];
   }
 
   getArtifact(id: number): ArtifactRecord | undefined {
-    return this.db.prepare("SELECT * FROM artifacts WHERE id = ?").get(id) as ArtifactRecord | undefined;
+    return this.db.prepare("SELECT * FROM artifacts WHERE id = ?").get(id) as unknown as ArtifactRecord | undefined;
   }
 
   deleteRun(runId: string): void {

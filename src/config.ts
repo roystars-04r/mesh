@@ -171,7 +171,7 @@ export function buildInvocation(
 }
 
 export function dryRunConfig(config: MeshConfig): MeshConfig {
-  const mock = join(packageRoot, "test", "fixtures", "mock-agent.mjs");
+  const mock = join(packageRoot, "fixtures", "mock-agent.mjs");
   const agents: Record<string, AgentConfig> = {};
   for (const id of Object.keys(config.agents)) {
     agents[id] = {

@@ -1,15 +1,17 @@
 {
   "name": "mesh-orchestrator",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "description": "Local multi-agent orchestration for Claude Code, Codex, Antigravity, and DSH",
   "bin": {
-    "mesh": "./src/cli.ts"
+    "mesh": "./dist/cli.js"
   },
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepublishOnly": "npm run build && npm test",
     "doctor": "node src/cli.ts doctor",
     "test": "node --test test/*.test.ts",
-    "check": "node --test test/*.test.ts && node src/cli.ts doctor",
+    "check": "npm run build && node --test test/*.test.ts",
     "web": "node src/cli.ts web"
   },
   "engines": {
@@ -35,11 +37,16 @@
     "llm"
   ],
   "files": [
-    "src",
+    "dist",
     "prompts",
+    "fixtures",
     "mesh.json",
     "README.md",
     "README.en.md",
     "LICENSE"
-  ]
+  ],
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3"
+  }
 }

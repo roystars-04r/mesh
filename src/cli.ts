@@ -12,7 +12,7 @@ import { startWebServer } from "./web.ts";
 import type { RunOptions } from "./types.ts";
 import { formatDuration, formatUsd } from "./util.ts";
 
-const VERSION = "0.2.0";
+const VERSION = (JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as { version?: string }).version ?? "0.0.0";
 
 function usage(): void {
   console.log(`mesh ${VERSION} — local multi-agent orchestration

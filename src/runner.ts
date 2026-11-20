@@ -515,7 +515,6 @@ async function runParallelBatch(ctx: RunContext, ready: StepConfig[], diff: stri
         ctx.db.upsertStep({ ...record, status: "failed", error: message, finished_at: nowIso() });
       }
       ctx.db.addEvent(ctx.runId, outcome.step.id, "step.failed", { error: message, merge: merge.stderr.slice(0, 2_000) });
-      record.status = "failed";
       failed = true;
       continue;
     }

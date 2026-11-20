@@ -11,7 +11,7 @@ import { cleanRuns } from "../src/maintenance.ts";
 import { cancelRun, startRun } from "../src/runner.ts";
 import { computeStats } from "../src/stats.ts";
 
-const fixture = fileURLToPath(new URL("./fixtures/mock-agent.mjs", import.meta.url));
+const fixture = fileURLToPath(new URL("../fixtures/mock-agent.mjs", import.meta.url));
 
 function makeWorkspace(config: unknown): string {
   const dir = mkdtempSync(join(tmpdir(), "mesh-flow-"));

@@ -38,19 +38,15 @@ Mesh 按顺序利用这些长处，而不是让一个 Agent 包办所有事情�
 ## 快速开始
 
 ```bash
+npm install -g mesh-orchestrator
+
 cd /path/to/your/project
-node /path/to/mesh/src/cli.ts init      # 创建 mesh.json 和 prompts/
-node /path/to/mesh/src/cli.ts doctor
-node /path/to/mesh/src/cli.ts run "给 /api/items 加上游标分页"
-```
-
-想少打点字，可以全局链接一次：
-
-```bash
-cd /path/to/mesh
-npm link
+mesh init      # 创建 mesh.json 和 prompts/
 mesh doctor
+mesh run "给 /api/items 加上游标分页"
 ```
+
+也可以从源码运行：`node /path/to/mesh/src/cli.ts run ...`（开发时不用构建）。
 
 `mesh run` 是同步执行的，会打印每一步的进度。加 `--verbose` 可以实时看到 Agent 的输出。运行结束后用 `mesh apply <run_id>` 把 diff 应用到原始工作区。
 
@@ -342,7 +338,7 @@ node src/cli.ts doctor
 node src/cli.ts run "smoke test" --dry-run --verbose
 ```
 
-没有构建步骤，也没有运行时 npm 依赖。TypeScript 由 Node 24 直接执行；`tsconfig.json` 只用于编辑器和类型检查。
+没有运行时 npm 依赖。开发时 Node 24 直接执行 TypeScript；发布前用 `npm run build` 编译到 `dist/`，`prepublishOnly` 会自动构建并跑测试。
 
 测试覆盖：配置校验与 DAG 排序、四种 Agent 事件格式、SQLite 持久化、worktree/diff、取消、恢复、审批、预算、并行合并、能力回退、apply、clean、stats、MCP 工具、Web 启动/取消/SSE。
 

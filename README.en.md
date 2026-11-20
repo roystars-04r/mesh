@@ -38,20 +38,16 @@ Versions verified locally: `claude 2.1.325`, `codex 0.164.0`, `agy 1.5.5`, `dsh 
 ## Quick start
 
 ```bash
+npm install -g mesh-orchestrator
+
 cd /path/to/your/project
-node /path/to/mesh/src/cli.ts init      # creates mesh.json and prompts/
-node /path/to/mesh/src/cli.ts doctor
-node /path/to/mesh/src/cli.ts run "add cursor pagination to /api/items"
-node /path/to/mesh/src/cli.ts apply <run_id>   # apply the diff when you are happy
-```
-
-To avoid typing the path, link once:
-
-```bash
-cd /path/to/mesh
-npm link
+mesh init      # creates mesh.json and prompts/
 mesh doctor
+mesh run "add cursor pagination to /api/items"
+mesh apply <run_id>   # apply the diff when you are happy
 ```
+
+You can also run from source: `node /path/to/mesh/src/cli.ts run ...` (no build needed while developing).
 
 `mesh run` runs synchronously and prints per-step progress. Add `--verbose` to stream agent text live. Mesh never applies changes to your original workspace by itself; `mesh apply` does that explicitly.
 
@@ -341,7 +337,7 @@ node src/cli.ts doctor
 node src/cli.ts run "smoke test" --dry-run --verbose
 ```
 
-No build step and no runtime npm dependencies. Node 24 executes the TypeScript directly; `tsconfig.json` is only for editors and type checking.
+No runtime npm dependencies. During development Node 24 executes the TypeScript directly; `npm run build` compiles to `dist/` before publishing, and `prepublishOnly` builds and tests automatically.
 
 Tests cover config validation and DAG ordering, four agent event formats, SQLite persistence, worktree/diff, cancel, resume, approvals, budgets, parallel merges, capability fallback, apply, clean, stats, MCP tools, and web start/cancel/SSE.
 
