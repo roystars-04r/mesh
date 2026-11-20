@@ -12,6 +12,7 @@
     "doctor": "node src/cli.ts doctor",
     "test": "node --test test/*.test.ts",
     "check": "npm run build && node --test test/*.test.ts",
+    "badges": "node scripts/badges.mjs",
     "web": "node src/cli.ts web"
   },
   "engines": {

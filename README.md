@@ -3,6 +3,8 @@
 [![CI](https://github.com/roystars-04r/mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/roystars-04r/mesh/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/mesh-orchestrator?color=cb3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/mesh-orchestrator) [![npm downloads](https://img.shields.io/npm/dm/mesh-orchestrator?color=cb3837)](https://www.npmjs.com/package/mesh-orchestrator) [![node](https://img.shields.io/node/v/mesh-orchestrator?color=5fa04e&logo=node.js&logoColor=white)](package.json) [![runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)](package.json) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/roystars-04r/mesh/pulls) [![GitHub stars](https://img.shields.io/github/stars/roystars-04r/mesh?style=social)](https://github.com/roystars-04r/mesh/stargazers)
 
+[![works with](https://img.shields.io/badge/works%20with-Claude%20Code%20%7C%20Codex%20%7C%20Antigravity%20%7C%20DSH-8A2BE2)](#为什么需要它) [![install size](https://badgen.net/packagephobia/install/mesh-orchestrator)](https://packagephobia.com/result?p=mesh-orchestrator) [![line coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/roystars-04r/mesh/main/badges/coverage.json)](https://github.com/roystars-04r/mesh/actions/workflows/badges.yml) [![works on my machine](https://forthebadge.com/images/badges/works-on-my-machine.svg)](https://forthebadge.com)
+
 [English](README.en.md) | **简体中文**
 
 Mesh 是一个本地编排器，用来调度你机器上已经装好的编码 Agent。它把一个目标拆成一个小型工作流，为每个 Agent 准备干净的工作区，并在步骤之间传递结构化产物。
