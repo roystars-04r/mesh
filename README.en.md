@@ -79,6 +79,8 @@ mesh web [options]                 Open the local dashboard
 mesh init                          Create mesh.json and prompts/ when missing
 ```
 
+`status`, `logs`, `cancel`, `apply`, `clean`, and `stats` all accept `--workspace <path>` (default: current directory).
+
 Options for `run` / `retry`:
 
 ```text

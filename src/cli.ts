@@ -158,6 +158,25 @@ function parseWebOptions(args: string[]): { port: number; host: string; workspac
   return { port, host, workspace };
 }
 
+function takeWorkspace(args: string[], fallback: string): { workspace: string; rest: string[] } {
+  const rest: string[] = [];
+  let workspace = fallback;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--workspace") {
+      const value = args[index + 1];
+      if (!value) throw new Error("missing --workspace value");
+      workspace = resolve(value);
+      index += 1;
+    } else if (arg.startsWith("--workspace=")) {
+      workspace = resolve(arg.slice("--workspace=".length));
+    } else {
+      rest.push(arg);
+    }
+  }
+  return { workspace, rest };
+}
+
 function init(workspace: string): void {
   const root = resolve(workspace);
   const target = configPath(root);
@@ -348,7 +367,8 @@ function main(): void {
       return;
     }
     if (command === "init") {
-      init(rest[0] ?? workspace);
+      const parsed = takeWorkspace(rest, workspace);
+      init(parsed.rest[0] ?? parsed.workspace);
       return;
     }
     if (command === "run") {
@@ -360,9 +380,10 @@ function main(): void {
       return;
     }
     if (command === "cancel") {
-      const runId = rest[0];
+      const parsed = takeWorkspace(rest, workspace);
+      const runId = parsed.rest[0];
       if (!runId) throw new Error("usage: mesh cancel <run_id>");
-      cancelRun(workspace, runId);
+      cancelRun(parsed.workspace, runId);
       return;
     }
     if (command === "apply") {
@@ -381,14 +402,16 @@ function main(): void {
       return;
     }
     if (command === "status") {
-      showStatus(workspace, rest[0]);
+      const parsed = takeWorkspace(rest, workspace);
+      showStatus(parsed.workspace, parsed.rest[0]);
       return;
     }
     if (command === "logs") {
-      const runId = rest[0];
+      const parsed = takeWorkspace(rest, workspace);
+      const runId = parsed.rest[0];
       if (!runId) throw new Error("usage: mesh logs <run_id> [--step id]");
-      const stepIndex = rest.indexOf("--step");
-      printLogs(workspace, runId, stepIndex >= 0 ? rest[stepIndex + 1] : undefined);
+      const stepIndex = parsed.rest.indexOf("--step");
+      printLogs(parsed.workspace, runId, stepIndex >= 0 ? parsed.rest[stepIndex + 1] : undefined);
       return;
     }
     if (command === "mcp") {

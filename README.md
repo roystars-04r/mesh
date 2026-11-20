@@ -78,6 +78,8 @@ mesh web [options]                 打开本地面板
 mesh init                          在缺失时创建 mesh.json 和 prompts/
 ```
 
+`status`、`logs`、`cancel`、`apply`、`clean`、`stats` 都接受 `--workspace <path>`（默认当前目录）。
+
 `run` / `retry` 的选项：
 
 ```text
