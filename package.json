@@ -3,14 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Local multi-agent orchestration for Claude Code, Codex, Gemini CLI, and DSH",
+  "description": "Local multi-agent orchestration for Claude Code, Codex, Antigravity, and DSH",
   "bin": {
     "mesh": "./src/cli.ts"
   },
   "scripts": {
     "doctor": "node src/cli.ts doctor",
     "test": "node --test test/*.test.ts",
-    "check": "node --test test/*.test.ts && node src/cli.ts doctor"
+    "check": "node --test test/*.test.ts && node src/cli.ts doctor",
+    "web": "node src/cli.ts web"
   },
   "engines": {
     "node": ">=24"

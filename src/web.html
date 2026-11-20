@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mesh</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1c232c;
+    --line: #2b3440;
+    --text: #e6edf3;
+    --muted: #8b98a5;
+    --accent: #58a6ff;
+    --ok: #3fb950;
+    --bad: #f85149;
+    --warn: #d29922;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .3px; }
+  header .path { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header .spacer { flex: 1; }
+  button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font: inherit;
+  }
+  button:hover { border-color: var(--accent); }
+  main {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    min-height: calc(100vh - 57px);
+  }
+  aside {
+    border-right: 1px solid var(--line);
+    padding: 12px;
+    overflow-y: auto;
+    max-height: calc(100vh - 57px);
+  }
+  .run {
+    padding: 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 4px;
+  }
+  .run:hover { background: var(--panel); }
+  .run.active { background: var(--panel); border-color: var(--line); }
+  .run .goal { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .run .meta { color: var(--muted); font-size: 12px; margin-top: 3px; display: flex; gap: 8px; align-items: center; }
+  .badge { text-transform: lowercase; border-radius: 999px; padding: 0 6px; font-size: 11px; border: 1px solid currentColor; }
+  .completed { color: var(--ok); }
+  .failed { color: var(--bad); }
+  .running { color: var(--warn); }
+  section { padding: 22px 26px; overflow-wrap: anywhere; }
+  h2 { margin: 0 0 4px; font-size: 20px; }
+  .sub { color: var(--muted); margin-bottom: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 22px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+  .card .value { margin-top: 3px; }
+  .step { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; background: var(--panel); }
+  .step > summary { list-style: none; cursor: pointer; padding: 10px 12px; display: flex; gap: 10px; align-items: center; }
+  .step > summary::-webkit-details-marker { display: none; }
+  .step .name { font-weight: 600; }
+  .step .agent { color: var(--muted); font-size: 12px; }
+  .step .body { border-top: 1px solid var(--line); padding: 10px 12px; }
+  .step pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 420px;
+    overflow: auto;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .error { color: var(--bad); white-space: pre-wrap; }
+  .artifacts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .artifacts a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+  }
+  .artifacts a:hover { border-color: var(--accent); }
+  .empty { color: var(--muted); padding: 30px 6px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 14px; }
+  code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; }
+    aside { border-right: 0; border-bottom: 1px solid var(--line); max-height: 280px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mesh</h1>
+  <span class="path" id="workspace"></span>
+  <span class="spacer"></span>
+  <span class="path" id="updated"></span>
+  <button id="refresh" type="button">刷新</button>
+</header>
+<main>
+  <aside>
+    <div id="runs"></div>
+  </aside>
+  <section id="detail">
+    <div class="empty">选择左侧的一次运行。</div>
+  </section>
+</main>
+<script>
+  const state = { runs: [], selected: null, loading: false };
+
+  const $ = (id) => document.getElementById(id);
+
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function statusClass(status) {
+    return status === 'completed' || status === 'failed' ? status : 'running';
+  }
+
+  function time(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('zh-CN', {
+      month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'
+    }).format(date);
+  }
+
+  function basename(path) {
+    const parts = String(path).split('/');
+    return parts[parts.length - 1] || path;
+  }
+
+  async function api(path) {
+    const response = await fetch(path, { cache: 'no-store' });
+    if (!response.ok) {
+      let message = response.status + ' ' + response.statusText;
+      try { message = (await response.json()).error || message; } catch {}
+      throw new Error(message);
+    }
+    return response.json();
+  }
+
+  function renderRuns() {
+    const list = $('runs');
+    list.replaceChildren();
+    if (!state.runs.length) {
+      list.append(el('div', 'empty', '还没有运行记录。在项目里执行 mesh run "<目标>"。'));
+      return;
+    }
+    for (const run of state.runs) {
+      const item = el('div', 'run' + (run.id === state.selected ? ' active' : ''));
+      item.append(el('div', 'goal', run.goal));
+      const meta = el('div', 'meta');
+      const badge = el('span', 'badge ' + statusClass(run.status), run.status);
+      meta.append(badge, el('span', '', time(run.created_at)), el('span', '', run.workflow));
+      item.append(meta);
+      item.addEventListener('click', () => selectRun(run.id));
+      list.append(item);
+    }
+  }
+
+  async function selectRun(id) {
+    state.selected = id;
+    renderRuns();
+    await loadRun();
+  }
+
+  function renderRun(data) {
+    const detail = $('detail');
+    detail.replaceChildren();
+    const run = data.run;
+    detail.append(el('h2', '', run.goal));
+    detail.append(el('div', 'sub', run.id + ' · ' + run.workflow + ' · ' + time(run.created_at)));
+
+    const grid = el('div', 'grid');
+    const cards = [
+      ['状态', run.status],
+      ['工作区', run.workspace],
+      ['创建时间', time(run.created_at)],
+      ['更新时间', time(run.updated_at)]
+    ];
+    for (const [label, value] of cards) {
+      const card = el('div', 'card');
+      card.append(el('div', 'label', label), el('div', 'value', value));
+      grid.append(card);
+    }
+    detail.append(grid);
+
+    if (!data.steps.length) {
+      detail.append(el('div', 'empty', '这次运行还没有步骤记录。'));
+    }
+
+    for (const step of data.steps) {
+      const box = document.createElement('details');
+      box.className = 'step';
+      box.open = step.status === 'failed';
+      const summary = document.createElement('summary');
+      summary.append(
+        el('span', 'badge ' + statusClass(step.status), step.status),
+        el('span', 'name', step.name),
+        el('span', 'agent', step.agent),
+        el('span', 'agent', step.started_at ? time(step.started_at) : '')
+      );
+      box.append(summary);
+
+      const body = el('div', 'body');
+      if (step.error) body.append(el('div', 'error', step.error));
+      if (step.output) {
+        const pre = el('pre', '', step.output.length > 40000 ? step.output.slice(0, 40000) + '\n…' : step.output);
+        body.append(pre);
+      } else if (!step.error) {
+        body.append(el('div', 'empty', '暂无输出。'));
+      }
+      box.append(body);
+      detail.append(box);
+    }
+
+    if (data.artifacts.length) {
+      detail.append(el('h2', '', '产物'));
+      const links = el('div', 'artifacts');
+      for (const artifact of data.artifacts) {
+        const link = document.createElement('a');
+        link.href = '/api/artifacts/' + artifact.id;
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        link.textContent = artifact.kind + ' · ' + basename(artifact.path);
+        links.append(link);
+      }
+      detail.append(links);
+    }
+  }
+
+  async function loadRun() {
+    if (!state.selected) return;
+    try {
+      const data = await api('/api/runs/' + encodeURIComponent(state.selected));
+      renderRun(data);
+    } catch (error) {
+      const detail = $('detail');
+      detail.replaceChildren(el('div', 'empty', '加载失败：' + error.message));
+    }
+  }
+
+  async function refresh(force) {
+    if (state.loading) return;
+    state.loading = true;
+    try {
+      const data = await api('/api/runs?limit=50');
+      state.runs = data.runs;
+      if (!state.selected || !state.runs.some((run) => run.id === state.selected)) {
+        state.selected = state.runs.length ? state.runs[0].id : null;
+      }
+      $('workspace').textContent = data.workspace;
+      $('updated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
+      renderRuns();
+      if (state.selected) await loadRun();
+      else $('detail').replaceChildren(el('div', 'empty', '还没有运行记录。在项目里执行 mesh run "<目标>"。'));
+    } catch (error) {
+      $('detail').replaceChildren(el('div', 'empty', '无法连接 Mesh：' + error.message));
+    } finally {
+      state.loading = false;
+    }
+  }
+
+  $('refresh').addEventListener('click', () => refresh(true));
+  refresh(true);
+  setInterval(() => refresh(false), 3000);
+</script>
+</body>
+</html>

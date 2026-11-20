@@ -5,6 +5,7 @@ import { configPath, packageRoot } from "./config.ts";
 import { doctor, printDoctor } from "./doctor.ts";
 import { runMcpServer } from "./mcp.ts";
 import { listAgents, showStatus, startRun } from "./runner.ts";
+import { startWebServer } from "./web.ts";
 import type { RunOptions } from "./types.ts";
 
 const VERSION = "0.1.0";
@@ -19,6 +20,7 @@ Usage:
   mesh status [run_id]                Show a run or recent runs
   mesh logs <run_id> [--step id]      Print a run's event log
   mesh mcp                            Start the MCP server on stdio
+  mesh web [options]                  Open a local read-only dashboard
   mesh init                           Create mesh.json and prompts/ if missing
 
 Run options:
@@ -30,10 +32,16 @@ Run options:
   --quiet              Only errors and the final summary
   --json               Print a machine-readable result
 
+Web options:
+  --port <number>      Port to listen on (default: 4317)
+  --host <address>     Bind address (default: 127.0.0.1)
+  --workspace <path>   Workspace to read (default: current directory)
+
 Examples:
   mesh doctor
   mesh run "Add pagination to the search endpoint" --verbose
   mesh run "Review the auth changes" --workflow implement-review-verify
+  mesh web
 `);
 }
 
@@ -73,6 +81,31 @@ function parseRunOptions(args: string[]): RunOptions {
   if (!options.goal) throw new Error("missing goal");
   if (!options.workflow) throw new Error("missing --workflow value");
   return options;
+}
+
+function parseWebOptions(args: string[]): { port: number; host: string; workspace: string } {
+  let port = 4317;
+  let host = "127.0.0.1";
+  let workspace = process.cwd();
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--port") {
+      const value = Number(args[++index]);
+      if (!Number.isInteger(value) || value < 0 || value > 65535) throw new Error("invalid --port value");
+      port = value;
+    } else if (arg === "--host") {
+      host = args[++index] ?? "";
+      if (!host) throw new Error("missing --host value");
+    } else if (arg === "--workspace") {
+      workspace = resolve(args[++index] ?? ".");
+    } else if (arg === "--help" || arg === "-h") {
+      usage();
+      process.exit(0);
+    } else {
+      throw new Error(`unknown option: ${arg}`);
+    }
+  }
+  return { port, host, workspace };
 }
 
 function init(workspace: string): void {
@@ -164,6 +197,10 @@ function main(): void {
     }
     if (command === "mcp") {
       runMcpServer();
+      return;
+    }
+    if (command === "web") {
+      startWebServer(parseWebOptions(rest));
       return;
     }
     throw new Error(`unknown command: ${command}`);

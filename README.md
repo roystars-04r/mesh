@@ -69,6 +69,7 @@ mesh run <goal> [options]          运行一个工作流
 mesh status [run_id]               查看某次运行或最近几次运行
 mesh logs <run_id> [--step id]     打印事件日志
 mesh mcp                           在 stdio 上启动 MCP server
+mesh web [options]                 打开本地只读面板
 mesh init                          在缺失时创建 mesh.json 和 prompts/
 ```
 
@@ -173,6 +174,25 @@ Codex 添加一个指向同一命令的 stdio MCP server 即可。Antigravity �
 用 mesh_run 启动目标“修复分页测试失败”，然后轮询 mesh_status。
 ```
 
+## Web 面板
+
+不想盯终端时，可以开一个本地只读面板：
+
+```bash
+mesh web
+# Mesh web: http://127.0.0.1:4317
+```
+
+它会读取当前工作区的 `.mesh/mesh.db`，展示运行列表、步骤输出、错误和 diff 产物，每 3 秒自动刷新。
+
+```text
+--port <number>     监听端口（默认 4317）
+--host <address>    绑定地址（默认 127.0.0.1）
+--workspace <path>  要读取的工作区（默认当前目录）
+```
+
+面板默认只绑定回环地址，没有登录，也没有写操作；不要把它直接暴露到公网。要换项目，用 `--workspace` 指过去，或者先 `cd` 到那个项目再启动。
+
 ## 配置
 
 `mesh.json` 顶层只有两个对象：`agents` 和 `workflows`。
@@ -255,4 +275,4 @@ node src/cli.ts run "smoke test" --dry-run --verbose
 - token/成本预算和单次运行限额
 - 破坏性步骤的交互式审批门
 - 更多工作流：`research-implement-review`、`debug-fix-verify`
-- 基于 `.mesh/mesh.db` 的 Web 面板
+- Web 面板触发运行、取消运行和查看实时事件

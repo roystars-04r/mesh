@@ -69,6 +69,7 @@ mesh run <goal> [options]           Run a workflow
 mesh status [run_id]                Show a run or recent runs
 mesh logs <run_id> [--step id]      Print the event log
 mesh mcp                            Start the MCP server on stdio
+mesh web [options]                  Open a local read-only dashboard
 mesh init                           Create mesh.json and prompts/ if missing
 ```
 
@@ -173,6 +174,25 @@ This lets an agent delegate a scoped job to another agent without leaving its ow
 Use mesh_run with goal "fix the failing pagination test", then poll mesh_status.
 ```
 
+## Web dashboard
+
+When you do not want to watch the terminal, start the local read-only dashboard:
+
+```bash
+mesh web
+# Mesh web: http://127.0.0.1:4317
+```
+
+It reads `.mesh/mesh.db` from the current workspace and shows runs, step output, errors, and diff artifacts. The page refreshes every 3 seconds.
+
+```text
+--port <number>     Port to listen on (default: 4317)
+--host <address>    Bind address (default: 127.0.0.1)
+--workspace <path>  Workspace to read (default: current directory)
+```
+
+The dashboard binds to loopback by default, has no authentication, and is read-only. Do not expose it publicly. To view another project, pass `--workspace` or `cd` into that project first.
+
 ## Configuration
 
 `mesh.json` has two top-level objects: `agents` and `workflows`.
@@ -255,4 +275,4 @@ No build step and no runtime npm dependencies. TypeScript is executed directly b
 - Token/cost budgets and per-run limits
 - Interactive approval gate for destructive steps
 - More workflows: `research-implement-review`, `debug-fix-verify`
-- Web dashboard over `.mesh/mesh.db`
+- Start, cancel, and stream runs from the web dashboard

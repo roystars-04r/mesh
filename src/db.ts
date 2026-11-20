@@ -142,6 +142,10 @@ export class MeshDb {
     return this.db.prepare("SELECT * FROM artifacts WHERE run_id = ? ORDER BY id ASC").all(runId) as ArtifactRecord[];
   }
 
+  getArtifact(id: number): ArtifactRecord | undefined {
+    return this.db.prepare("SELECT * FROM artifacts WHERE id = ?").get(id) as ArtifactRecord | undefined;
+  }
+
   close(): void {
     this.db.close();
   }
