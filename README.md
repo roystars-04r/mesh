@@ -112,6 +112,7 @@ mesh init                          在缺失时创建 mesh.json 和 prompts/
 
 - `research-implement-review` — 先调研（默认走 Antigravity 的 `research` 能力），再实现，最后审查。
 - `debug-fix-verify` — Codex 先定位根因，Claude 做最小修复，DSH 复跑测试验证。
+- `codex-implement-claude-review` — Codex 实现、Claude 审查（默认工作流的角色对调）。
 
 工作流就是 `mesh.json` 里的数据：
 

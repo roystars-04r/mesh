@@ -113,6 +113,7 @@ Two more built-in workflows:
 
 - `research-implement-review` — research first (Antigravity's `research` capability by default), then implement, then review.
 - `debug-fix-verify` — Codex finds the root cause, Claude makes the smallest fix, DSH reruns the tests.
+- `codex-implement-claude-review` — Codex implements, Claude reviews (the default roles swapped).
 
 Workflows are data in `mesh.json`:
 
