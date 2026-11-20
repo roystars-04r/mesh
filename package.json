@@ -1,7 +1,6 @@
 {
-  "name": "mesh",
+  "name": "mesh-orchestrator",
   "version": "0.2.0",
-  "private": true,
   "type": "module",
   "description": "Local multi-agent orchestration for Claude Code, Codex, Antigravity, and DSH",
   "bin": {
@@ -15,5 +14,32 @@
   },
   "engines": {
     "node": ">=24"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/roystars-04r/mesh.git"
+  },
+  "homepage": "https://github.com/roystars-04r/mesh#readme",
+  "bugs": {
+    "url": "https://github.com/roystars-04r/mesh/issues"
+  },
+  "keywords": [
+    "multi-agent",
+    "ai-agents",
+    "orchestration",
+    "claude-code",
+    "codex",
+    "cli",
+    "workflow",
+    "llm"
+  ],
+  "files": [
+    "src",
+    "prompts",
+    "mesh.json",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ]
 }
