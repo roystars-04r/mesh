@@ -37,8 +37,19 @@ export function loadConfig(workspace: string): MeshConfig {
       throw new Error(`workflow "${id}" must contain a non-empty steps array`);
     }
     for (const step of workflow.steps) {
-      if (!step.id || !step.agent) throw new Error(`workflow "${id}" has a step without id/agent`);
-      if (!config.agents[step.agent]) throw new Error(`workflow "${id}" step "${step.id}" references unknown agent "${step.agent}"`);
+      if (!step.id) throw new Error(`workflow "${id}" has a step without an id`);
+      if (!step.agent && !step.capability) {
+        throw new Error(`workflow "${id}" step "${step.id}" needs either agent or capability`);
+      }
+      if (step.agent && !config.agents[step.agent]) {
+        throw new Error(`workflow "${id}" step "${step.id}" references unknown agent "${step.agent}"`);
+      }
+      if (!step.agent && step.capability) {
+        const capable = Object.values(config.agents).some((agent) => agent.capabilities.includes(step.capability!));
+        if (!capable) {
+          throw new Error(`workflow "${id}" step "${step.id}" wants capability "${step.capability}" but no agent declares it`);
+        }
+      }
     }
     orderSteps(workflow);
   }
@@ -51,6 +62,17 @@ export function getWorkflow(config: MeshConfig, name: string): WorkflowConfig {
     throw new Error(`unknown workflow "${name}". Available: ${Object.keys(config.workflows).join(", ")}`);
   }
   return workflow;
+}
+
+export function resolveStepAgents(config: MeshConfig, step: StepConfig): string[] {
+  if (step.agent) return [step.agent];
+  const capability = step.capability;
+  if (!capability) throw new Error(`step "${step.id}" needs either agent or capability`);
+  const ids = Object.entries(config.agents)
+    .filter(([, agent]) => agent.capabilities.includes(capability))
+    .map(([id]) => id);
+  if (ids.length === 0) throw new Error(`no agent provides capability "${capability}" for step "${step.id}"`);
+  return ids;
 }
 
 export function getAgent(config: MeshConfig, id: string): AgentConfig {

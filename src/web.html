@@ -49,9 +49,12 @@
     font: inherit;
   }
   button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .55; cursor: default; }
+  button.primary { background: #1f6feb; border-color: #1f6feb; }
+  button.danger { color: var(--bad); border-color: var(--bad); }
   main {
     display: grid;
-    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-columns: 340px minmax(0, 1fr);
     min-height: calc(100vh - 57px);
   }
   aside {
@@ -60,6 +63,37 @@
     overflow-y: auto;
     max-height: calc(100vh - 57px);
   }
+  .new-run {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+  .new-run textarea {
+    width: 100%;
+    min-height: 64px;
+    resize: vertical;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px;
+    font: inherit;
+  }
+  .new-run .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .new-run select, .new-run input[type="number"] {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 5px 7px;
+    font: inherit;
+    min-width: 0;
+  }
+  .new-run select { flex: 1; }
+  .new-run input[type="number"] { width: 84px; }
+  .new-run label { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 5px; }
   .run {
     padding: 10px;
     border: 1px solid transparent;
@@ -71,19 +105,20 @@
   .run.active { background: var(--panel); border-color: var(--line); }
   .run .goal { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .run .meta { color: var(--muted); font-size: 12px; margin-top: 3px; display: flex; gap: 8px; align-items: center; }
-  .badge { text-transform: lowercase; border-radius: 999px; padding: 0 6px; font-size: 11px; border: 1px solid currentColor; }
+  .badge { text-transform: lowercase; border-radius: 999px; padding: 0 6px; font-size: 11px; border: 1px solid currentColor; white-space: nowrap; }
   .completed { color: var(--ok); }
-  .failed { color: var(--bad); }
-  .running { color: var(--warn); }
+  .failed, .cancelled { color: var(--bad); }
+  .running, .queued { color: var(--warn); }
+  .skipped, .pending { color: var(--muted); }
   section { padding: 22px 26px; overflow-wrap: anywhere; }
   h2 { margin: 0 0 4px; font-size: 20px; }
-  .sub { color: var(--muted); margin-bottom: 18px; }
+  .sub { color: var(--muted); margin-bottom: 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 22px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
   .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
   .card .value { margin-top: 3px; }
   .step { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; background: var(--panel); }
-  .step > summary { list-style: none; cursor: pointer; padding: 10px 12px; display: flex; gap: 10px; align-items: center; }
+  .step > summary { list-style: none; cursor: pointer; padding: 10px 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .step > summary::-webkit-details-marker { display: none; }
   .step .name { font-weight: 600; }
   .step .agent { color: var(--muted); font-size: 12px; }
@@ -112,11 +147,13 @@
   }
   .artifacts a:hover { border-color: var(--accent); }
   .empty { color: var(--muted); padding: 30px 6px; }
+  .empty.small { padding: 6px 0; }
   .hint { color: var(--muted); font-size: 12px; margin-top: 14px; }
+  .form-error { color: var(--bad); font-size: 12px; margin-top: 8px; white-space: pre-wrap; }
   code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
   @media (max-width: 760px) {
     main { grid-template-columns: 1fr; }
-    aside { border-right: 0; border-bottom: 1px solid var(--line); max-height: 280px; }
+    aside { border-right: 0; border-bottom: 1px solid var(--line); max-height: 320px; }
   }
 </style>
 </head>
@@ -130,6 +167,19 @@
 </header>
 <main>
   <aside>
+    <form class="new-run" id="new-run">
+      <textarea id="goal" placeholder="这次要让 Mesh 做什么？例如：给搜索接口加上分页" required></textarea>
+      <div class="row">
+        <select id="workflow" aria-label="工作流"></select>
+        <label><input type="checkbox" id="dry-run"> mock</label>
+        <input type="number" id="max-cost" min="0" step="0.01" placeholder="$上限" title="成本上限（美元）">
+      </div>
+      <div class="row">
+        <button type="submit" class="primary" id="start">开始运行</button>
+        <span class="path" id="form-hint"></span>
+      </div>
+      <div class="form-error" id="form-error" hidden></div>
+    </form>
     <div id="runs"></div>
   </aside>
   <section id="detail">
@@ -137,7 +187,8 @@
   </section>
 </main>
 <script>
-  const state = { runs: [], selected: null, loading: false };
+  const state = { runs: [], selected: null, loading: false, detail: null, stream: null, config: null };
+  const TERMINAL = ['completed', 'failed', 'cancelled'];
 
   const $ = (id) => document.getElementById(id);
 
@@ -149,7 +200,9 @@
   }
 
   function statusClass(status) {
-    return status === 'completed' || status === 'failed' ? status : 'running';
+    if (status === 'completed' || status === 'failed' || status === 'cancelled') return status;
+    if (status === 'skipped' || status === 'pending') return status;
+    return 'running';
   }
 
   function time(value) {
@@ -161,13 +214,30 @@
     }).format(date);
   }
 
+  function money(value) {
+    const number = Number(value || 0);
+    return number > 0 ? '$' + number.toFixed(4) : '$0';
+  }
+
+  function tokens(value) {
+    return new Intl.NumberFormat('zh-CN').format(Number(value || 0));
+  }
+
+  function usageText(usage) {
+    if (!usage) return '';
+    try {
+      const value = typeof usage === 'string' ? JSON.parse(usage) : usage;
+      return ' · ' + tokens(value.inputTokens) + '/' + tokens(value.outputTokens) + ' tok · ' + money(value.costUsd);
+    } catch { return ''; }
+  }
+
   function basename(path) {
     const parts = String(path).split('/');
     return parts[parts.length - 1] || path;
   }
 
-  async function api(path) {
-    const response = await fetch(path, { cache: 'no-store' });
+  async function api(path, options) {
+    const response = await fetch(path, Object.assign({ cache: 'no-store' }, options));
     if (!response.ok) {
       let message = response.status + ' ' + response.statusText;
       try { message = (await response.json()).error || message; } catch {}
@@ -176,29 +246,80 @@
     return response.json();
   }
 
+  function setFormError(message) {
+    const box = $('form-error');
+    box.textContent = message || '';
+    box.hidden = !message;
+  }
+
   function renderRuns() {
     const list = $('runs');
     list.replaceChildren();
     if (!state.runs.length) {
-      list.append(el('div', 'empty', '还没有运行记录。在项目里执行 mesh run "<目标>"。'));
+      list.append(el('div', 'empty small', '还没有运行记录。'));
       return;
     }
     for (const run of state.runs) {
       const item = el('div', 'run' + (run.id === state.selected ? ' active' : ''));
       item.append(el('div', 'goal', run.goal));
       const meta = el('div', 'meta');
-      const badge = el('span', 'badge ' + statusClass(run.status), run.status);
-      meta.append(badge, el('span', '', time(run.created_at)), el('span', '', run.workflow));
+      meta.append(el('span', 'badge ' + statusClass(run.status), run.status), el('span', '', time(run.created_at)), el('span', '', run.workflow));
       item.append(meta);
       item.addEventListener('click', () => selectRun(run.id));
       list.append(item);
     }
   }
 
-  async function selectRun(id) {
+  function closeStream() {
+    if (state.stream) {
+      state.stream.close();
+      state.stream = null;
+    }
+  }
+
+  function selectRun(id) {
     state.selected = id;
+    closeStream();
     renderRuns();
-    await loadRun();
+    loadRun().then(openStream).catch((error) => {
+      $('detail').replaceChildren(el('div', 'empty', '加载失败：' + error.message));
+    });
+  }
+
+  function openStream() {
+    if (!state.detail || !state.selected) return;
+    if (TERMINAL.includes(state.detail.run.status)) return;
+    const runId = state.selected;
+    const source = new EventSource('/api/runs/' + encodeURIComponent(runId) + '/stream');
+    state.stream = source;
+    source.addEventListener('snapshot', (event) => {
+      const data = JSON.parse(event.data);
+      if (state.selected !== data.run.id) return;
+      state.detail = data;
+      renderRun(data);
+    });
+    source.addEventListener('done', () => {
+      closeStream();
+      refresh(false);
+    });
+    source.onerror = () => closeStream();
+  }
+
+  function renderCancel(run) {
+    if (TERMINAL.includes(run.status)) return null;
+    const button = el('button', 'danger', '取消运行');
+    button.type = 'button';
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        await api('/api/runs/' + encodeURIComponent(run.id) + '/cancel', { method: 'POST' });
+        refresh(true);
+      } catch (error) {
+        button.disabled = false;
+        alert('取消失败：' + error.message);
+      }
+    });
+    return button;
   }
 
   function renderRun(data) {
@@ -206,14 +327,20 @@
     detail.replaceChildren();
     const run = data.run;
     detail.append(el('h2', '', run.goal));
-    detail.append(el('div', 'sub', run.id + ' · ' + run.workflow + ' · ' + time(run.created_at)));
+    const sub = el('div', 'sub');
+    sub.append(el('span', '', run.id + ' · ' + run.workflow + ' · ' + time(run.created_at)));
+    const cancel = renderCancel(run);
+    if (cancel) sub.append(cancel);
+    detail.append(sub);
 
     const grid = el('div', 'grid');
     const cards = [
       ['状态', run.status],
-      ['工作区', run.workspace],
+      ['成本', money(run.total_cost_usd)],
+      ['Tokens', tokens(run.input_tokens) + ' / ' + tokens(run.output_tokens)],
       ['创建时间', time(run.created_at)],
-      ['更新时间', time(run.updated_at)]
+      ['更新时间', time(run.updated_at)],
+      ['工作区', run.source_root || run.workspace]
     ];
     for (const [label, value] of cards) {
       const card = el('div', 'card');
@@ -229,13 +356,14 @@
     for (const step of data.steps) {
       const box = document.createElement('details');
       box.className = 'step';
-      box.open = step.status === 'failed';
+      box.open = step.status === 'failed' || step.status === 'running';
       const summary = document.createElement('summary');
       summary.append(
         el('span', 'badge ' + statusClass(step.status), step.status),
         el('span', 'name', step.name),
         el('span', 'agent', step.agent),
-        el('span', 'agent', step.started_at ? time(step.started_at) : '')
+        el('span', 'agent', step.started_at ? time(step.started_at) : ''),
+        el('span', 'agent', step.status === 'running' ? '进行中…' : usageText(step.usage))
       );
       box.append(summary);
 
@@ -245,13 +373,13 @@
         const pre = el('pre', '', step.output.length > 40000 ? step.output.slice(0, 40000) + '\n…' : step.output);
         body.append(pre);
       } else if (!step.error) {
-        body.append(el('div', 'empty', '暂无输出。'));
+        body.append(el('div', 'empty small', '暂无输出。'));
       }
       box.append(body);
       detail.append(box);
     }
 
-    if (data.artifacts.length) {
+    if (data.artifacts && data.artifacts.length) {
       detail.append(el('h2', '', '产物'));
       const links = el('div', 'artifacts');
       for (const artifact of data.artifacts) {
@@ -268,13 +396,9 @@
 
   async function loadRun() {
     if (!state.selected) return;
-    try {
-      const data = await api('/api/runs/' + encodeURIComponent(state.selected));
-      renderRun(data);
-    } catch (error) {
-      const detail = $('detail');
-      detail.replaceChildren(el('div', 'empty', '加载失败：' + error.message));
-    }
+    const data = await api('/api/runs/' + encodeURIComponent(state.selected));
+    state.detail = data;
+    renderRun(data);
   }
 
   async function refresh(force) {
@@ -285,12 +409,17 @@
       state.runs = data.runs;
       if (!state.selected || !state.runs.some((run) => run.id === state.selected)) {
         state.selected = state.runs.length ? state.runs[0].id : null;
+        closeStream();
       }
       $('workspace').textContent = data.workspace;
       $('updated').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN');
       renderRuns();
-      if (state.selected) await loadRun();
-      else $('detail').replaceChildren(el('div', 'empty', '还没有运行记录。在项目里执行 mesh run "<目标>"。'));
+      if (state.selected && !state.stream) {
+        await loadRun();
+        openStream();
+      } else if (!state.selected) {
+        $('detail').replaceChildren(el('div', 'empty', '选择左侧的一次运行。'));
+      }
     } catch (error) {
       $('detail').replaceChildren(el('div', 'empty', '无法连接 Mesh：' + error.message));
     } finally {
@@ -298,7 +427,55 @@
     }
   }
 
+  async function loadConfig() {
+    try {
+      const config = await api('/api/config');
+      state.config = config;
+      const select = $('workflow');
+      select.replaceChildren();
+      for (const name of Object.keys(config.workflows || {})) {
+        const option = el('option', '', name);
+        option.value = name;
+        select.append(option);
+      }
+      if (!select.options.length) {
+        setFormError('mesh.json 里没有工作流');
+        $('start').disabled = true;
+      }
+    } catch (error) {
+      setFormError('读取 mesh.json 失败：' + error.message);
+      $('start').disabled = true;
+    }
+  }
+
+  $('new-run').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const goal = $('goal').value.trim();
+    if (!goal) return;
+    const button = $('start');
+    button.disabled = true;
+    setFormError('');
+    try {
+      const payload = { goal, workflow: $('workflow').value, dry_run: $('dry-run').checked };
+      const cost = Number($('max-cost').value);
+      if (Number.isFinite(cost) && cost > 0) payload.max_cost_usd = cost;
+      const data = await api('/api/runs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      $('goal').value = '';
+      await refresh(true);
+      selectRun(data.run_id);
+    } catch (error) {
+      setFormError('启动失败：' + error.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   $('refresh').addEventListener('click', () => refresh(true));
+  loadConfig();
   refresh(true);
   setInterval(() => refresh(false), 3000);
 </script>

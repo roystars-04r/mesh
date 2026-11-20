@@ -9,7 +9,10 @@ Workspace:
 Run: {{run_id}}
 Step: {{step_id}}
 
-Work directly in the workspace. Keep the change focused on the goal. Read the existing code before editing. Run the relevant tests or build if the project provides them.
+Work directly in the workspace. Keep the change focused on the goal. Context from earlier steps:
+{{previous}}
+
+Read the existing code before editing. Run the relevant tests or build if the project provides them.
 
 Do not commit, push, deploy, or modify anything outside the workspace. Do not print secrets or tokens.
 

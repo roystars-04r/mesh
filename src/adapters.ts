@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import type { AgentEvent, AgentResult } from "./types.ts";
+import type { AgentEvent, AgentResult, Usage } from "./types.ts";
 import type { Invocation } from "./config.ts";
 import { nowIso, stripAnsi } from "./util.ts";
 
@@ -60,20 +60,72 @@ export function normalizeEvent(obj: Record<string, unknown>): AgentEvent {
   return { type, text: text || undefined, raw: obj, at: nowIso() };
 }
 
+function num(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Best-effort token/cost extraction across Claude (stream-json), Codex (--json)
+ * and DSH (headless --json) event shapes. Later events win, because the final
+ * result event usually carries the aggregate usage for the whole turn.
+ */
+export function extractUsage(events: AgentEvent[]): Usage | undefined {
+  let usage: Usage | undefined;
+  for (const event of events) {
+    const raw = event.raw as Record<string, unknown> | undefined;
+    if (!raw || typeof raw !== "object") continue;
+    const candidates: Array<Record<string, unknown>> = [raw];
+    for (const key of ["message", "response", "result"]) {
+      const nested = raw[key];
+      if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+        candidates.push(nested as Record<string, unknown>);
+      }
+    }
+    for (const obj of candidates) {
+      const container = (obj.usage ?? obj.token_usage ?? obj.tokens) as Record<string, unknown> | undefined;
+      if (!container || typeof container !== "object") continue;
+      const input = num(container.input_tokens ?? container.prompt_tokens ?? container.inputTokens);
+      const output = num(container.output_tokens ?? container.completion_tokens ?? container.outputTokens);
+      const cost = num(
+        container.cost_usd ?? container.total_cost_usd ?? obj.total_cost_usd ?? obj.cost_usd,
+      );
+      if (input === undefined && output === undefined && cost === undefined) continue;
+      usage = {
+        inputTokens: input ?? usage?.inputTokens ?? 0,
+        outputTokens: output ?? usage?.outputTokens ?? 0,
+        costUsd: cost ?? usage?.costUsd ?? 0,
+      };
+    }
+    const directCost = num(raw.total_cost_usd ?? raw.cost_usd);
+    if (directCost !== undefined) {
+      usage = {
+        inputTokens: usage?.inputTokens ?? 0,
+        outputTokens: usage?.outputTokens ?? 0,
+        costUsd: directCost,
+      };
+    }
+  }
+  return usage;
+}
+
 export interface RunAgentOptions {
   invocation: Invocation;
   workspace: string;
   onEvent?: (event: AgentEvent) => void;
+  signal?: AbortSignal;
 }
 
 export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
-  const { invocation, workspace, onEvent } = options;
+  const { invocation, workspace, onEvent, signal } = options;
   const events: AgentEvent[] = [];
   const assistantTexts: string[] = [];
   let resultText = "";
   let stdout = "";
   let stderr = "";
   let timedOut = false;
+  let spawnError = false;
+  let cancelled = signal?.aborted === true;
+  let settled = false;
 
   return new Promise((resolve) => {
     let child;
@@ -91,11 +143,17 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         stdout: "",
         stderr: String(error),
         timedOut: false,
+        spawnError: true,
+        cancelled,
       });
       return;
     }
 
     const finish = (exitCode: number) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
       resolve({
         exitCode,
         finalText: resultText || assistantTexts.at(-1) || lastText(events) || stripAnsi(stdout).trim(),
@@ -103,23 +161,42 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
         stdout,
         stderr,
         timedOut,
+        cancelled,
+        spawnError,
+        usage: extractUsage(events),
       });
     };
 
+    const kill = () => {
+      if (child.exitCode !== null || child.killed) return;
+      child.kill("SIGTERM");
+      setTimeout(() => {
+        if (child.exitCode === null) child.kill("SIGKILL");
+      }, 3_000).unref();
+    };
+
+    const abort = () => {
+      cancelled = true;
+      kill();
+    };
+    if (cancelled) {
+      kill();
+    } else {
+      signal?.addEventListener("abort", abort, { once: true });
+    }
+
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
-      setTimeout(() => child.kill("SIGKILL"), 3_000).unref();
+      kill();
     }, invocation.timeoutMs);
 
     child.on("error", (error) => {
-      clearTimeout(timer);
+      spawnError = true;
       stderr += `\nspawn error: ${String(error)}`;
       finish(127);
     });
 
     child.on("close", (code) => {
-      clearTimeout(timer);
       finish(code ?? 1);
     });
 
@@ -131,6 +208,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentResult> {
     }
 
     if (!child.stdout || !child.stderr) {
+      spawnError = true;
       finish(127);
       return;
     }

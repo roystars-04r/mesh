@@ -1,13 +1,14 @@
-import { spawn } from "node:child_process";
-import { closeSync, openSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
+import { applyRun } from "./apply.ts";
+import { startBackgroundRun } from "./background.ts";
 import { loadConfig } from "./config.ts";
 import { MeshDb } from "./db.ts";
-import { newId, ensureDir, nowIso } from "./util.ts";
+import { cancelRun } from "./runner.ts";
 
 const PROTOCOL_VERSION = "2024-11-05";
-const SERVER_INFO = { name: "mesh", version: "0.1.0" };
+const SERVER_INFO = { name: "mesh", version: "0.2.0" };
 
 type JsonRpcId = string | number | null;
 
@@ -30,11 +31,20 @@ function fail(id: JsonRpcId, code: number, message: string): void {
   send({ jsonrpc: "2.0", id, error: { code, message } });
 }
 
+const RUN_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    run_id: { type: "string" },
+    status: { type: "string" },
+    log: { type: "string" },
+  },
+};
+
 const TOOLS = [
   {
     name: "mesh_run",
     description:
-      "Start a local multi-agent workflow. Returns immediately with a run id; use mesh_status to poll. Default workflow: implement-review (Claude implements, Codex reviews).",
+      "Start a local multi-agent workflow in the background. Returns immediately with a run id; use mesh_status to poll and mesh_logs to follow progress. Default workflow: implement-review (Claude implements, Codex reviews).",
     inputSchema: {
       type: "object",
       properties: {
@@ -42,9 +52,14 @@ const TOOLS = [
         workflow: { type: "string", description: "Workflow name from mesh.json (default implement-review)" },
         workspace: { type: "string", description: "Absolute workspace path (defaults to the MCP server cwd)" },
         dry_run: { type: "boolean", description: "Use the local mock agent (no model calls)" },
+        max_cost_usd: { type: "number", description: "Stop before the next step once the run costs more than this" },
+        approve_dangerous: { type: "boolean", description: "Auto-approve steps marked approve: true" },
+        notify: { type: "string", description: "Webhook URL to POST a summary to when the run ends" },
       },
       required: ["goal"],
+      additionalProperties: false,
     },
+    outputSchema: RUN_OUTPUT_SCHEMA,
   },
   {
     name: "mesh_status",
@@ -52,12 +67,13 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: { run_id: { type: "string" }, workspace: { type: "string" } },
+      additionalProperties: false,
     },
   },
   {
     name: "mesh_agents",
     description: "List configured agents and their declared capabilities.",
-    inputSchema: { type: "object", properties: {} },
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "mesh_artifacts",
@@ -66,6 +82,47 @@ const TOOLS = [
       type: "object",
       properties: { run_id: { type: "string" }, workspace: { type: "string" } },
       required: ["run_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "mesh_cancel",
+    description: "Cancel a running or queued run. The runner aborts the active agent and marks the run cancelled.",
+    inputSchema: {
+      type: "object",
+      properties: { run_id: { type: "string" }, workspace: { type: "string" } },
+      required: ["run_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "mesh_logs",
+    description: "Read the event log of a run (optionally filtered to one step), newest last.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        run_id: { type: "string" },
+        step: { type: "string", description: "Only events for this step id" },
+        limit: { type: "number", description: "Return at most this many events (default 100)" },
+        workspace: { type: "string" },
+      },
+      required: ["run_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "mesh_apply",
+    description: "Apply a finished run's diff to the workspace (or only check that it applies).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        run_id: { type: "string" },
+        step: { type: "string", description: "Apply only this step's diff" },
+        check: { type: "boolean", description: "Only verify that the patch applies" },
+        workspace: { type: "string" },
+      },
+      required: ["run_id"],
+      additionalProperties: false,
     },
   },
 ];
@@ -75,53 +132,6 @@ function textResult(value: unknown, isError = false) {
     content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
     isError,
   };
-}
-
-function startBackgroundRun(args: Record<string, unknown>): unknown {
-  const goal = String(args.goal ?? "").trim();
-  if (!goal) throw new Error("goal is required");
-  const workspace = resolve(String(args.workspace ?? process.cwd()));
-  const workflow = String(args.workflow ?? "implement-review");
-  const runId = newId("run");
-  const runDir = join(workspace, ".mesh", "runs", runId);
-  ensureDir(runDir);
-  const db = new MeshDb(workspace);
-  db.upsertRun({
-    id: runId,
-    goal,
-    workflow,
-    status: "queued",
-    source_root: workspace,
-    workspace: join(runDir, "workspace"),
-    created_at: nowIso(),
-    updated_at: nowIso(),
-  });
-  db.close();
-
-  const logPath = join(runDir, "runner.log");
-  const logFd = openSync(logPath, "a");
-  const cli = resolve(process.argv[1]);
-  const cmdArgs = [
-    cli,
-    "run",
-    goal,
-    "--workflow",
-    workflow,
-    "--workspace",
-    workspace,
-    "--run-id",
-    runId,
-    "--quiet",
-  ];
-  if (args.dry_run === true) cmdArgs.push("--dry-run");
-  const child = spawn(process.execPath, cmdArgs, {
-    cwd: workspace,
-    detached: true,
-    stdio: ["ignore", logFd, logFd],
-  });
-  child.unref();
-  closeSync(logFd);
-  return { run_id: runId, status: "started", log: logPath };
 }
 
 function statusPayload(workspace: string, runId?: string): unknown {
@@ -136,11 +146,43 @@ function statusPayload(workspace: string, runId?: string): unknown {
   }
 }
 
+function logsPayload(workspace: string, runId: string, step?: string, limit = 100): string[] {
+  const path = join(resolve(workspace), ".mesh", "runs", runId, "events.ndjson");
+  if (!existsSync(path)) throw new Error(`no events for run ${runId}`);
+  const lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
+  const events: string[] = [];
+  for (const line of lines) {
+    if (step) {
+      try {
+        const parsed = JSON.parse(line) as { step_id?: string };
+        if (parsed.step_id !== step) continue;
+      } catch {
+        // keep malformed lines so the caller can see them
+      }
+    }
+    events.push(line);
+  }
+  return events.slice(-Math.max(1, limit));
+}
+
 function handleTool(name: string, args: Record<string, unknown>): unknown {
   const workspace = resolve(String(args.workspace ?? process.cwd()));
   switch (name) {
-    case "mesh_run":
-      return startBackgroundRun(args);
+    case "mesh_run": {
+      const goal = String(args.goal ?? "").trim();
+      if (!goal) throw new Error("goal is required");
+      if (!existsSync(join(workspace, "mesh.json"))) throw new Error(`no mesh.json in ${workspace}`);
+      const started = startBackgroundRun({
+        goal,
+        workflow: String(args.workflow ?? "implement-review"),
+        workspace,
+        dryRun: args.dry_run === true,
+        maxCostUsd: typeof args.max_cost_usd === "number" ? args.max_cost_usd : undefined,
+        approveDangerous: args.approve_dangerous === true,
+        notify: typeof args.notify === "string" ? args.notify : undefined,
+      });
+      return { run_id: started.runId, status: "started", log: started.logPath };
+    }
     case "mesh_status":
       return statusPayload(workspace, args.run_id ? String(args.run_id) : undefined);
     case "mesh_agents": {
@@ -161,6 +203,26 @@ function handleTool(name: string, args: Record<string, unknown>): unknown {
       } finally {
         db.close();
       }
+    }
+    case "mesh_cancel": {
+      const runId = String(args.run_id ?? "");
+      if (!runId) throw new Error("run_id is required");
+      return cancelRun(workspace, runId);
+    }
+    case "mesh_logs": {
+      const runId = String(args.run_id ?? "");
+      if (!runId) throw new Error("run_id is required");
+      const limit = typeof args.limit === "number" ? args.limit : 100;
+      return logsPayload(workspace, runId, args.step ? String(args.step) : undefined, limit);
+    }
+    case "mesh_apply": {
+      const runId = String(args.run_id ?? "");
+      if (!runId) throw new Error("run_id is required");
+      return applyRun(workspace, {
+        runId,
+        step: args.step ? String(args.step) : undefined,
+        check: args.check === true,
+      });
     }
     default:
       throw new Error(`unknown tool: ${name}`);

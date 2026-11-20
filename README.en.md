@@ -1,10 +1,10 @@
-**English** | [简体中文](README.md)
-
 # Mesh
 
-Mesh is a local orchestrator for coding agents you already have installed. It routes a goal through a small workflow, gives each agent a clean workspace, and passes structured artifacts between steps.
+**English** | [简体中文](README.md)
 
-It is **not** a marketplace, a chat room, or a new agent runtime. The agents stay Claude Code, Codex, Antigravity CLI, and DSH; Mesh decides who does what and keeps the handoff inspectable.
+Mesh is a local orchestrator for the coding agents you already have installed. It splits a goal into a small workflow, gives each agent a clean workspace, and passes structured artifacts between steps.
+
+It is **not** a task marketplace, a chat room, or another agent runtime. Claude Code, Codex, Antigravity CLI, and DSH still do the work; Mesh decides who does which step and makes the handoffs inspectable.
 
 ```
 goal ──► implement (Claude Code) ──► review (Codex) ──► verify (DSH, optional)
@@ -14,9 +14,9 @@ goal ──► implement (Claude Code) ──► review (Codex) ──► verify
 
 ## Why
 
-Each CLI is strong at different work:
+Each CLI is good at different things:
 
-| Agent | Best at | Adapter |
+| Agent | Strength | Adapter |
 |---|---|---|
 | Claude Code | implementation, refactors, frontend, long tasks | `claude -p --output-format stream-json` |
 | Codex | review, debugging, tests, backend | `codex exec --json --sandbox workspace-write --skip-git-repo-check` |
@@ -27,11 +27,11 @@ Mesh uses those strengths in sequence instead of asking one agent to do everythi
 
 ## Requirements
 
-- Node.js 24+ (Mesh uses native TypeScript execution and `node:sqlite`)
+- Node.js 24+ (Mesh runs TypeScript directly and uses built-in `node:sqlite`)
 - At least one agent CLI on `PATH`
-- Git (optional, but recommended; it enables isolated worktrees and cleaner diffs)
+- Git (optional but recommended: isolated worktrees, parallel branches, cleaner diffs)
 
-Checked locally with: `claude 2.1.325`, `codex 0.164.0`, `agy 1.5.5`, `dsh 0.2.2-rc.1`.
+Versions verified locally: `claude 2.1.325`, `codex 0.164.0`, `agy 1.5.5`, `dsh 0.2.2-rc.1`.
 
 ## Quick start
 
@@ -39,10 +39,11 @@ Checked locally with: `claude 2.1.325`, `codex 0.164.0`, `agy 1.5.5`, `dsh 0.2.2
 cd /path/to/your/project
 node /path/to/mesh/src/cli.ts init      # creates mesh.json and prompts/
 node /path/to/mesh/src/cli.ts doctor
-node /path/to/mesh/src/cli.ts run "Add cursor pagination to /api/items"
+node /path/to/mesh/src/cli.ts run "add cursor pagination to /api/items"
+node /path/to/mesh/src/cli.ts apply <run_id>   # apply the diff when you are happy
 ```
 
-For convenience, link it once:
+To avoid typing the path, link once:
 
 ```bash
 cd /path/to/mesh
@@ -50,49 +51,66 @@ npm link
 mesh doctor
 ```
 
-`mesh run` is synchronous and prints step progress. Use `--verbose` to stream agent text.
+`mesh run` runs synchronously and prints per-step progress. Add `--verbose` to stream agent text live. Mesh never applies changes to your original workspace by itself; `mesh apply` does that explicitly.
 
-### Try it without spending tokens
+### A free smoke test
 
 ```bash
 mesh run "smoke test" --dry-run --verbose
 ```
 
-Every agent is replaced by `test/fixtures/mock-agent.mjs`. This exercises workspace preparation, prompt rendering, event capture, diffs, and SQLite persistence without calling a model.
+`--dry-run` swaps every agent for `test/fixtures/mock-agent.mjs`. It still exercises workspace preparation, prompt rendering, event capture, diffs, and SQLite persistence, but makes no model calls.
 
 ## Commands
 
 ```text
-mesh doctor                         Check Node, git, config, and agent CLIs
-mesh agents                         List configured agents and capabilities
-mesh run <goal> [options]           Run a workflow
-mesh status [run_id]                Show a run or recent runs
-mesh logs <run_id> [--step id]      Print the event log
-mesh mcp                            Start the MCP server on stdio
-mesh web [options]                  Open a local read-only dashboard
-mesh init                           Create mesh.json and prompts/ if missing
+mesh doctor                        Check Node, git, config, and agent CLIs
+mesh agents                        List configured agents and capabilities
+mesh run <goal> [options]          Run a workflow
+mesh retry <run_id> [options]      Rerun failed steps, reusing completed ones
+mesh cancel <run_id>               Cancel a running or queued run
+mesh apply <run_id> [--step id]    Apply a run's diff to the workspace
+mesh status [run_id]               Show one run or recent runs
+mesh logs <run_id> [--step id]     Print the event log
+mesh stats [--json]                Aggregate counts, durations, and cost
+mesh clean [options]               Delete old runs and prune worktrees
+mesh mcp                           Start the MCP server on stdio
+mesh web [options]                 Open the local dashboard
+mesh init                          Create mesh.json and prompts/ when missing
 ```
 
-Run options:
+Options for `run` / `retry`:
 
 ```text
---workflow <name>    Workflow name (default: implement-review)
+--workflow <name>    Workflow from mesh.json (default: implement-review)
 --workspace <path>   Workspace to operate on (default: current directory)
---run-id <id>        Reuse a run id
---dry-run            Replace agents with the local mock
---verbose            Stream agent text
+--run-id <id>        Continue an existing run id
+--resume             With --run-id: reuse completed steps, rerun failed/cancelled ones
+--retry <n>          Retry each failed step up to n times (default: 0)
+--max-cost <usd>     Stop before the next step once the run exceeds this cost
+--yes                Auto-approve steps marked approve: true
+--notify <url>       POST a JSON summary to this webhook when the run ends
+--dry-run            Replace every agent with the local mock
+--verbose            Stream agent text to stdout
 --quiet              Only errors and the final summary
---json               Machine-readable result
+--json               Print a machine-readable result
 ```
+
+Exit codes: `0` success, `1` failure, `130` cancelled.
 
 ## Workflows
 
 The default `implement-review`:
 
-1. **implement** — Claude Code edits the workspace.
-2. **review** — Codex inspects the workspace and the diff, and reports findings by severity.
+1. **implement** — Claude Code changes the workspace.
+2. **review** — Codex inspects the workspace and diff and reports issues by severity.
 
-`implement-review-verify` adds a DSH verification step that runs tests/build commands and reports failures.
+`implement-review-verify` appends a DSH verification step that runs tests/builds and reports failures.
+
+Two more built-in workflows:
+
+- `research-implement-review` — research first (Antigravity's `research` capability by default), then implement, then review.
+- `debug-fix-verify` — Codex finds the root cause, Claude makes the smallest fix, DSH reruns the tests.
 
 Workflows are data in `mesh.json`:
 
@@ -109,37 +127,48 @@ Workflows are data in `mesh.json`:
 }
 ```
 
-Steps form a DAG via `needs`. P0 executes steps sequentially in dependency order; the data model is ready for parallel branches.
+Steps form a DAG through `needs`. Steps that are ready at the same time and do not depend on each other run in parallel in per-step git worktrees, then merge back into the run workspace in order. Outside git, they fall back to serial execution and emit a `run.warning` event.
+
+A step can name an `agent`, or route by `capability`:
+
+```json
+{ "id": "review", "capability": "review", "needs": ["implement"] }
+```
+
+Capability routing picks candidates in `mesh.json` declaration order. It only falls back to the next candidate on spawn failure (for example the CLI is missing); a real agent failure is recorded as a failure rather than silently rerouted.
 
 ## Prompt variables
 
-Prompt files support:
-
-| Variable | Value |
+| Variable | Meaning |
 |---|---|
 | `{{goal}}` | The user's goal |
-| `{{workspace}}` | The run's isolated workspace |
+| `{{workspace}}` | This run's isolated workspace |
 | `{{run_id}}` | Run id |
 | `{{step_id}}` | Step id |
-| `{{diff}}` | Current diff (empty until a step changes files) |
+| `{{diff}}` | Current diff (empty before a step edits files) |
+| `{{previous}}` | Summaries of completed steps (in completion order, 8000 chars each) |
 | `{{source_root}}` | Original project directory |
 
-## How a run works
+`{{previous}}` lets a research or diagnosis step hand its findings to the next step without writing intermediate files into the project.
 
-1. Mesh loads `mesh.json`, validates the workflow, and creates `.mesh/runs/<run_id>/`.
+## What happens during a run
+
+1. Mesh reads `mesh.json`, validates the workflow, and creates `.mesh/runs/<run_id>/`.
 2. It prepares an isolated workspace:
-   - if the project is a git repo **and** `mesh.json` is committed, it creates a detached worktree from `HEAD`;
-   - otherwise it copies the project, excluding `.mesh/`, `.git/`, and `node_modules/`.
-3. Each step gets a rendered prompt at `.mesh/runs/<run_id>/prompts/<step>.md`.
+   - if the project is a git repository **and** `mesh.json` is committed, a detached worktree from `HEAD`;
+   - otherwise a copy of the project excluding `.mesh/`, `.git/`, and `node_modules/`.
+3. Rendered prompts are written to `.mesh/runs/<run_id>/prompts/<step>.md`.
 4. Agent stdout is parsed as NDJSON when possible and stored in `.mesh/mesh.db` and `events.ndjson`.
-5. The final text, raw events, stderr, and a diff are stored under `.mesh/runs/<run_id>/`.
-6. Mesh never commits, pushes, deploys, or deletes the original workspace.
+5. Final text, raw events, stderr, diffs, and token/cost usage stay under `.mesh/runs/<run_id>/`.
+6. When the run ends, a configured webhook receives a JSON summary; runs started from MCP or the web UI also get a queued record.
+7. Mesh never commits, pushes, deploys, or deletes the original workspace. Applying results back is an explicit `mesh apply`.
 
 Artifacts:
 
 ```
 .mesh/runs/<run_id>/
   brief.md
+  summary.md
   prompts/<step>.md
   steps/<step>.md
   artifacts/diff-<step>.patch
@@ -147,59 +176,100 @@ Artifacts:
   workspace/
 ```
 
-The control plane lives in `.mesh/mesh.db` (SQLite, WAL mode). Add `.mesh/` to `.gitignore`. If you delete `.mesh/` while worktree runs exist, also run `git worktree prune`.
+Control-plane data lives in `.mesh/mesh.db` (SQLite, WAL). Add `.mesh/` to `.gitignore`. If you delete `.mesh/` while worktree runs still exist, run `git worktree prune` afterwards; `mesh clean` does it automatically.
+
+## Cancel, resume, retry
+
+```bash
+mesh cancel <run_id>      # a running runner sees the CANCEL marker on its next poll and aborts
+mesh retry <run_id>       # reuse completed steps, rerun failed/cancelled ones
+mesh run "..." --run-id <id> --resume
+```
+
+- Cancellation uses a `<run_dir>/CANCEL` marker polled every 500ms. The current agent gets `SIGTERM`, then `SIGKILL` after 3 seconds.
+- `Ctrl+C` follows the same path: the first interrupt stops the current step, the second exits immediately (130).
+- Runs whose process died but still say `running` are flipped to `cancelled` on the next start or `mesh cancel`.
+- Resuming continues from the latest diff; completed steps are marked `skipped`, so they do not spend tokens again.
+
+## Budgets and approvals
+
+Set a budget at the top level of `mesh.json`:
+
+```json
+{ "budget": { "maxCostUsd": 2.5, "maxInputTokens": 200000, "maxOutputTokens": 60000 } }
+```
+
+`--max-cost` overrides the per-run cost cap. Usage is extracted from agent events (Claude stream-json, Codex `--json`, DSH `headless --json`) and checked after each step; when exceeded, no further step starts and the run is marked failed. If an agent reports no usage, Mesh writes a `run.warning`.
+
+Gate a risky step:
+
+```json
+{ "id": "deploy", "agent": "claude", "approve": true, "promptFile": "prompts/deploy.md" }
+```
+
+On a TTY Mesh asks `[y/N]`. In non-interactive environments the step fails with `approval required; rerun with --yes` instead of silently proceeding.
 
 ## MCP
 
-`mesh mcp` speaks JSON-RPC over stdio and exposes:
+`mesh mcp` exposes a stdio JSON-RPC server with seven tools:
 
 | Tool | Purpose |
 |---|---|
-| `mesh_run` | Start a workflow in the background; returns a run id |
-| `mesh_status` | Show a run, steps, and artifacts |
+| `mesh_run` | Start a workflow in the background, returns a run id |
+| `mesh_status` | Show a run's steps and artifacts |
 | `mesh_agents` | List configured agents |
 | `mesh_artifacts` | List a run's artifacts |
+| `mesh_logs` | Read the event log (optionally by step) |
+| `mesh_cancel` | Cancel a run |
+| `mesh_apply` | Check or apply a run's diff |
 
-Register it with Claude Code:
+Register it in Claude Code:
 
 ```bash
 claude mcp add mesh -- node /path/to/mesh/src/cli.ts mcp
 ```
 
-For Codex, add a stdio MCP server entry pointing at the same command. For Antigravity, add a stdio MCP server through `agy mcp add` with the same `node .../src/cli.ts mcp` command.
+Add a stdio MCP server pointing at the same command in Codex. For Antigravity, `agy mcp add` the same `node .../src/cli.ts mcp` command.
 
-This lets an agent delegate a scoped job to another agent without leaving its own session:
+An agent can then delegate a bounded piece of work without leaving its session:
 
 ```
-Use mesh_run with goal "fix the failing pagination test", then poll mesh_status.
+Start "fix the pagination test failure" with mesh_run, follow it with mesh_logs, then mesh_apply.
 ```
 
 ## Web dashboard
-
-When you do not want to watch the terminal, start the local read-only dashboard:
 
 ```bash
 mesh web
 # Mesh web: http://127.0.0.1:4317
 ```
 
-It reads `.mesh/mesh.db` from the current workspace and shows runs, step output, errors, and diff artifacts. The page refreshes every 3 seconds.
+The dashboard reads `.mesh/mesh.db` for the current workspace and can:
+
+- start a run from a form (workflow, dry-run, cost cap);
+- cancel a running run;
+- follow progress over SSE (`/api/runs/:id/stream`) instead of polling;
+- inspect step output, errors, token/cost usage, and diff artifact links.
 
 ```text
---port <number>     Port to listen on (default: 4317)
---host <address>    Bind address (default: 127.0.0.1)
---workspace <path>  Workspace to read (default: current directory)
+--port <number>     Listen port (default 4317)
+--host <address>    Bind address (default 127.0.0.1)
+--workspace <path>  Workspace to operate on (default current directory)
 ```
 
-The dashboard binds to loopback by default, has no authentication, and is read-only. Do not expose it publicly. To view another project, pass `--workspace` or `cd` into that project first.
+The dashboard binds to loopback only and has no authentication. POST endpoints reject cross-site `Origin`, require `application/json`, and cap bodies at 64KB. Do not expose it publicly. To switch projects, pass `--workspace` or `cd` into that project first.
 
 ## Configuration
 
-`mesh.json` has two top-level objects: `agents` and `workflows`.
+Top-level keys in `mesh.json`: `agents`, `workflows`, and optional `budget` and `notify`.
 
-Gemini Code Assist for individuals is no longer supported by Google. Mesh therefore uses Antigravity (`agy`), the migration path Google names. If you have a Gemini API key, you can add a `gemini` agent back manually with `GEMINI_API_KEY` in its environment.
+```json
+{ "notify": { "webhook": "https://example.com/mesh-hook" } }
+```
 
-`dsh` is launched through npm (`npm exec --yes --package=@deepseek-ai/dsh -- dsh`) so it works even when the package is only installed in the npm/npx cache. Set `versionArgs` when the CLI's version flag is not a plain `--version`, as the DSH entry does.
+Google has discontinued Gemini Code Assist for individuals, so Mesh defaults to Antigravity (`agy`), the migration path Google points to. If you have a Gemini API key you can add a `gemini` agent back manually and provide `GEMINI_API_KEY` in the environment.
+
+`dsh` is launched through npm (`npm exec --yes --package=@deepseek-ai/dsh -- dsh`), so it also works when the package only exists in the npm/npx cache. If a CLI's version flag is not plain `--version`, override it with `versionArgs`; the DSH entry is an example.
 
 ### Agent
 
@@ -219,44 +289,45 @@ Gemini Code Assist for individuals is no longer supported by Google. Mesh theref
 - `arg` — append the prompt as the last argument.
 - `stdin` — write the prompt to stdin.
 - `arg-template` — substitute `{{prompt}}` inside `args`; useful for CLIs that need `-p "..."`.
-- `none` — no prompt.
+- `none` — pass no prompt.
 
-`args` also supports `{{workspace}}`, `{{goal}}`, `{{run_id}}`, and `{{step_id}}`.
+`args` also support `{{workspace}}`, `{{goal}}`, `{{run_id}}`, and `{{step_id}}`.
 
-### Workflow step
+### Workflow steps
 
 ```json
 {
   "id": "review",
   "agent": "codex",
   "needs": ["implement"],
-  "promptFile": "prompts/review.md"
+  "promptFile": "prompts/review.md",
+  "approve": false
 }
 ```
 
-`prompt` can be used instead of `promptFile` for small workflows.
+Small workflows can use `prompt` instead of `promptFile`, and `capability` instead of `agent`.
 
-## Safety defaults
+## Safe defaults
 
-- Local only; no server, no telemetry, no cloud calls from Mesh itself.
-- Agents run in a copied workspace or a detached worktree, never the original.
-- No `--dangerously-skip-permissions` or equivalent in the default config.
-- Prompts tell agents not to commit, push, deploy, or print secrets.
-- The CLI has no destructive commands; deleting `.mesh/` is left to the user.
-- Agent CLIs may still ask for approval or need authentication. Mesh does not bypass their permission systems.
+- Local only. Mesh has no server, no telemetry, and does not send project data anywhere on its own.
+- Agents run in a copied workspace or a detached worktree and never touch the original directory.
+- The default configuration contains no `--dangerously-skip-permissions` style bypasses.
+- Prompts ask agents not to commit, push, deploy, or print secrets.
+- The only destructive CLI command is `mesh clean`; it keeps the 10 most recent runs by default and requires confirmation or `--yes`.
+- Agent CLIs may still require approvals or login; Mesh does not bypass their own permission systems.
 
-If a CLI blocks on an interactive prompt, run its one-time login/trust flow first, then re-run Mesh with `--verbose` to see where it stopped.
+If a CLI hangs on an interactive prompt, run its login/trust flow once, then rerun Mesh with `--verbose` to see where it stops.
 
-Codex needs a writable `CODEX_HOME` (usually `~/.codex`). In a heavily sandboxed agent environment it may fail with `failed to initialize in-process app-server client: Operation not permitted`; run Mesh from a normal terminal or point `CODEX_HOME` at a writable profile.
+Codex needs a writable `CODEX_HOME` (usually `~/.codex`). In a heavily restricted sandbox it can fail with `failed to initialize in-process app-server client: Operation not permitted`; run Mesh from a normal terminal or point `CODEX_HOME` at a writable profile.
 
 ## Current limitations
 
-- P0 runs steps sequentially; parallel branches are not scheduled yet.
-- Token/cost accounting is not implemented.
-- Approval gates are prompt-level, not cryptographic.
-- The MCP `mesh_run` is fire-and-forget; poll `mesh_status`.
-- Agent output formats differ; Mesh extracts text heuristically and always keeps raw stdout/stderr.
-- The `dsh` adapter assumes `dsh headless` is configured and authenticated in the current environment. Set `DSH_HOME` in `mesh.json` `env` if you use a non-default profile.
+- Parallel execution requires git worktree mode; copy mode still runs steps serially.
+- Token/cost accounting depends on each agent's output format. When usage is missing Mesh can only warn, not bill precisely.
+- Approvals are interactive confirmations, not cryptographic authorization.
+- The web dashboard has no authentication and is meant for local use.
+- Agent output formats differ; Mesh extracts text heuristically but always keeps raw stdout/stderr.
+- The `dsh` adapter assumes `dsh headless` is configured and logged in. For a non-default profile, set `DSH_HOME` in the agent's `env`.
 
 ## Development
 
@@ -266,13 +337,6 @@ node src/cli.ts doctor
 node src/cli.ts run "smoke test" --dry-run --verbose
 ```
 
-No build step and no runtime npm dependencies. TypeScript is executed directly by Node 24; `tsconfig.json` is for editors/type checking.
+No build step and no runtime npm dependencies. Node 24 executes the TypeScript directly; `tsconfig.json` is only for editors and type checking.
 
-## Roadmap
-
-- Parallel DAG execution and per-step worktrees
-- Capability-based routing and fallback (`coding` → Claude, `review` → Codex)
-- Token/cost budgets and per-run limits
-- Interactive approval gate for destructive steps
-- More workflows: `research-implement-review`, `debug-fix-verify`
-- Start, cancel, and stream runs from the web dashboard
+Tests cover config validation and DAG ordering, four agent event formats, SQLite persistence, worktree/diff, cancel, resume, approvals, budgets, parallel merges, capability fallback, apply, clean, stats, MCP tools, and web start/cancel/SSE.

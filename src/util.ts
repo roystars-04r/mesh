@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, readdirSync, symlinkSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 
 export function newId(prefix: string): string {
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
@@ -134,4 +134,43 @@ export function copyTree(source: string, target: string, skip: Set<string> = new
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function isTerminalStatus(status: string): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+export function processAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Rebase a stored absolute path when the workspace directory was moved. */
+export function rebasePath(path: string, storedRoot: string, currentRoot: string): string {
+  if (!storedRoot) return path;
+  const prefix = `${resolve(storedRoot)}${sep}`;
+  const absolute = resolve(path);
+  if (!absolute.startsWith(prefix)) return path;
+  return join(resolve(currentRoot), absolute.slice(prefix.length));
+}
+
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const seconds = Math.round(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
+export function formatUsd(value: number | null | undefined): string {
+  const amount = typeof value === "number" && Number.isFinite(value) ? value : 0;
+  if (amount === 0) return "$0";
+  return `$${amount.toFixed(amount < 0.01 ? 4 : 2)}`;
 }

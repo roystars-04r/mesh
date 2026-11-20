@@ -132,6 +132,56 @@
           "promptFile": "prompts/verify.md"
         }
       ]
+    },
+    "research-implement-review": {
+      "steps": [
+        {
+          "id": "research",
+          "capability": "research",
+          "promptFile": "prompts/research.md"
+        },
+        {
+          "id": "implement",
+          "agent": "claude",
+          "needs": [
+            "research"
+          ],
+          "promptFile": "prompts/implement.md"
+        },
+        {
+          "id": "review",
+          "agent": "codex",
+          "needs": [
+            "implement"
+          ],
+          "promptFile": "prompts/review.md"
+        }
+      ]
+    },
+    "debug-fix-verify": {
+      "steps": [
+        {
+          "id": "debug",
+          "agent": "codex",
+          "promptFile": "prompts/debug.md"
+        },
+        {
+          "id": "fix",
+          "agent": "claude",
+          "needs": [
+            "debug"
+          ],
+          "promptFile": "prompts/fix.md"
+        },
+        {
+          "id": "verify",
+          "agent": "dsh",
+          "needs": [
+            "fix"
+          ],
+          "promptFile": "prompts/verify.md"
+        }
+      ]
     }
   }
 }

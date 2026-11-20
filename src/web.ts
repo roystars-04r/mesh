@@ -1,10 +1,15 @@
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { readFileSync, realpathSync, statSync } from "node:fs";
-import { resolve, sep } from "node:path";
+import { join, resolve, sep } from "node:path";
+import { startBackgroundRun } from "./background.ts";
+import { loadConfig } from "./config.ts";
 import { MeshDb } from "./db.ts";
+import { cancelRun } from "./runner.ts";
 import type { ArtifactRecord } from "./types.ts";
+import { isTerminalStatus } from "./util.ts";
 
 const MAX_ARTIFACT_BYTES = 2_000_000;
+const MAX_BODY_BYTES = 64 * 1024;
 const HTML = readFileSync(new URL("./web.html", import.meta.url), "utf8");
 const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
 
@@ -74,11 +79,208 @@ function limitFrom(value: string | null): number {
   return Math.min(200, Math.max(1, Math.trunc(parsed)));
 }
 
-function handle(request: IncomingMessage, response: ServerResponse, options: WebOptions): void {
+/**
+ * Reject cross-site POSTs. Browsers send Origin on cross-origin writes; a
+ * missing Origin (curl, tests) is allowed, but a foreign one is not.
+ */
+function originAllowed(request: IncomingMessage): boolean {
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  const host = String(request.headers.host ?? "");
+  try {
+    const parsed = new URL(origin);
+    if (parsed.host === host) return true;
+    const hostname = host.replace(/:\d+$/, "");
+    return LOOPBACK.has(parsed.hostname) && LOOPBACK.has(hostname);
+  } catch {
+    return false;
+  }
+}
+
+function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  return new Promise((done, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    request.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        reject(new Error("request body is too large"));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => {
+      const text = Buffer.concat(chunks).toString("utf8").trim();
+      if (!text) return done({});
+      try {
+        done(JSON.parse(text));
+      } catch {
+        reject(new Error("invalid JSON body"));
+      }
+    });
+    request.on("error", reject);
+  });
+}
+
+function runPayload(db: MeshDb, runId: string) {
+  const run = db.getRun(runId);
+  if (!run) return null;
+  return { run, steps: db.getSteps(runId) };
+}
+
+async function createRun(request: IncomingMessage, response: ServerResponse, workspace: string) {
+  if (!originAllowed(request)) {
+    sendJson(response, 403, { error: "cross-origin request rejected" });
+    return;
+  }
+  const contentType = String(request.headers["content-type"] ?? "");
+  if (!contentType.includes("application/json")) {
+    sendJson(response, 415, { error: "expected application/json" });
+    return;
+  }
+  let body: Record<string, unknown>;
+  try {
+    body = (await readJsonBody(request)) as Record<string, unknown>;
+  } catch (error) {
+    sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+    return;
+  }
+  const goal = String(body.goal ?? "").trim();
+  if (!goal) {
+    sendJson(response, 400, { error: "goal is required" });
+    return;
+  }
+  if (!existsSync(join(workspace, "mesh.json"))) {
+    sendJson(response, 400, { error: `no mesh.json in ${workspace}` });
+    return;
+  }
+  const maxCost = Number(body.max_cost_usd);
+  let started;
+  try {
+    started = startBackgroundRun({
+      goal,
+      workflow: String(body.workflow ?? "implement-review"),
+      workspace,
+      dryRun: body.dry_run === true,
+      maxCostUsd: Number.isFinite(maxCost) && maxCost > 0 ? maxCost : undefined,
+      approveDangerous: body.approve_dangerous === true,
+      notify: typeof body.notify === "string" ? body.notify : undefined,
+    });
+  } catch (error) {
+    sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+    return;
+  }
+  sendJson(response, 202, { run_id: started.runId, status: "started", log: started.logPath });
+}
+
+function streamRun(
+  request: IncomingMessage,
+  response: ServerResponse,
+  workspace: string,
+  runId: string,
+): void {
+  const db = new MeshDb(workspace);
+  let initial;
+  try {
+    initial = runPayload(db, runId);
+  } finally {
+    db.close();
+  }
+  if (!initial) {
+    sendJson(response, 404, { error: `run not found: ${runId}` });
+    return;
+  }
+
+  response.writeHead(200, {
+    "content-type": "text/event-stream; charset=utf-8",
+    "cache-control": "no-store",
+    connection: "keep-alive",
+    "x-accel-buffering": "no",
+  });
+  let last = "";
+  let finished = false;
+  let poll: NodeJS.Timeout | undefined;
+  let heartbeat: NodeJS.Timeout | undefined;
+
+  const send = (event: string, data: unknown) => {
+    response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    if (poll) clearInterval(poll);
+    if (heartbeat) clearInterval(heartbeat);
+    response.end();
+  };
+  const tick = () => {
+    if (finished) return;
+    const live = new MeshDb(workspace);
+    try {
+      const payload = runPayload(live, runId);
+      if (!payload) {
+        send("error", { error: "run disappeared" });
+        finish();
+        return;
+      }
+      const json = JSON.stringify(payload);
+      if (json !== last) {
+        last = json;
+        send("snapshot", payload);
+      }
+      if (isTerminalStatus(payload.run.status)) {
+        send("done", { status: payload.run.status });
+        finish();
+      }
+    } catch (error) {
+      send("error", { error: error instanceof Error ? error.message : String(error) });
+      finish();
+    } finally {
+      live.close();
+    }
+  };
+
+  send("snapshot", initial);
+  if (isTerminalStatus(initial.run.status)) {
+    send("done", { status: initial.run.status });
+    finish();
+    return;
+  }
+  poll = setInterval(tick, 1_000);
+  heartbeat = setInterval(() => response.write(": ping\n\n"), 15_000);
+  request.on("close", finish);
+}
+
+async function handle(request: IncomingMessage, response: ServerResponse, options: WebOptions): Promise<void> {
   const workspace = resolve(options.workspace);
   const url = new URL(request.url ?? "/", "http://127.0.0.1");
+  const method = request.method ?? "GET";
 
-  if (request.method !== "GET") {
+  if (method === "POST") {
+    if (url.pathname === "/api/runs") {
+      await createRun(request, response, workspace);
+      return;
+    }
+    const cancelMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/cancel$/);
+    if (cancelMatch) {
+      if (!originAllowed(request)) {
+        sendJson(response, 403, { error: "cross-origin request rejected" });
+        return;
+      }
+      const runId = decodeURIComponent(cancelMatch[1]);
+      try {
+        sendJson(response, 200, cancelRun(workspace, runId));
+      } catch (error) {
+        sendJson(response, 404, { error: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
+    sendJson(response, 405, { error: "method not allowed" });
+    return;
+  }
+
+  if (method !== "GET") {
+    response.setHeader("allow", "GET, POST");
     sendJson(response, 405, { error: "method not allowed" });
     return;
   }
@@ -93,6 +295,15 @@ function handle(request: IncomingMessage, response: ServerResponse, options: Web
     return;
   }
 
+  if (url.pathname === "/api/config") {
+    try {
+      sendJson(response, 200, loadConfig(workspace));
+    } catch (error) {
+      sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
   if (url.pathname === "/api/runs") {
     const db = new MeshDb(workspace);
     try {
@@ -103,21 +314,23 @@ function handle(request: IncomingMessage, response: ServerResponse, options: Web
     return;
   }
 
+  const streamMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/stream$/);
+  if (streamMatch) {
+    streamRun(request, response, workspace, decodeURIComponent(streamMatch[1]));
+    return;
+  }
+
   const runMatch = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
   if (runMatch) {
     const runId = decodeURIComponent(runMatch[1]);
     const db = new MeshDb(workspace);
     try {
-      const run = db.getRun(runId);
-      if (!run) {
+      const payload = runPayload(db, runId);
+      if (!payload) {
         sendJson(response, 404, { error: `run not found: ${runId}` });
         return;
       }
-      sendJson(response, 200, {
-        run,
-        steps: db.getSteps(runId),
-        artifacts: db.getArtifacts(runId),
-      });
+      sendJson(response, 200, { ...payload, artifacts: db.getArtifacts(runId) });
     } finally {
       db.close();
     }
@@ -157,13 +370,11 @@ function handle(request: IncomingMessage, response: ServerResponse, options: Web
 export function createWebServer(options: WebOptions): Server {
   const workspace = resolve(options.workspace);
   return createServer((request, response) => {
-    try {
-      handle(request, response, { ...options, workspace });
-    } catch (error) {
+    handle(request, response, { ...options, workspace }).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       if (!response.headersSent) sendJson(response, 500, { error: message });
       else response.end();
-    }
+    });
   });
 }
 
