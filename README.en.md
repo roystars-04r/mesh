@@ -7,7 +7,7 @@ Mesh is a local orchestrator for the coding agents you already have installed. I
 It is **not** a task marketplace, a chat room, or another agent runtime. Claude Code, Codex, Antigravity CLI, and DSH still do the work; Mesh decides who does which step and makes the handoffs inspectable.
 
 ```
-goal ──► implement (Claude Code) ──► review (Codex) ──► verify (DSH, optional)
+goal ──► implement (Codex) ──► review (Claude Code) ──► verify (DSH, optional)
               │                         │
               └── diff + summary ───────┘
 ```
@@ -84,7 +84,7 @@ mesh init                          Create mesh.json and prompts/ when missing
 Options for `run` / `retry`:
 
 ```text
---workflow <name>    Workflow from mesh.json (default: implement-review)
+--workflow <name>    Workflow from mesh.json (default: codex-implement-claude-review)
 --workspace <path>   Workspace to operate on (default: current directory)
 --run-id <id>        Continue an existing run id
 --resume             With --run-id: reuse completed steps, rerun failed/cancelled ones
@@ -102,18 +102,17 @@ Exit codes: `0` success, `1` failure, `130` cancelled.
 
 ## Workflows
 
-The default `implement-review`:
+The default `codex-implement-claude-review`:
 
-1. **implement** — Claude Code changes the workspace.
-2. **review** — Codex inspects the workspace and diff and reports issues by severity.
+1. **implement** — Codex changes the workspace.
+2. **review** — Claude Code inspects the workspace and diff and reports issues by severity.
 
-`implement-review-verify` appends a DSH verification step that runs tests/builds and reports failures.
+For the opposite split (Claude implements, Codex reviews), use `--workflow implement-review`; `implement-review-verify` appends a DSH verification step that runs tests/builds and reports failures.
 
 Two more built-in workflows:
 
 - `research-implement-review` — research first (Antigravity's `research` capability by default), then implement, then review.
 - `debug-fix-verify` — Codex finds the root cause, Claude makes the smallest fix, DSH reruns the tests.
-- `codex-implement-claude-review` — Codex implements, Claude reviews (the default roles swapped).
 
 Workflows are data in `mesh.json`:
 

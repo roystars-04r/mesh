@@ -33,7 +33,7 @@ Usage:
   mesh init                           Create mesh.json and prompts/ if missing
 
 Run options:
-  --workflow <name>    Workflow from mesh.json (default: implement-review)
+  --workflow <name>    Workflow from mesh.json (default: codex-implement-claude-review)
   --workspace <path>   Workspace to operate on (default: current directory)
   --run-id <id>        Continue an existing run id (used by the MCP server and web UI)
   --resume             With --run-id: reuse completed steps instead of rerunning them
@@ -75,7 +75,7 @@ Examples:
 function parseRunOptions(args: string[], requireGoal = true): RunOptions {
   const options: RunOptions = {
     goal: "",
-    workflow: "implement-review",
+    workflow: "codex-implement-claude-review",
     workspace: process.cwd(),
   };
   const goal: string[] = [];

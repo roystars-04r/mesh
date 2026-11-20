@@ -7,7 +7,7 @@ Mesh 是一个本地编排器，用来调度你机器上已经装好的编码 Ag
 它**不是**任务市场、聊天室，也不是新的 Agent 运行时。执行任务的仍然是 Claude Code、Codex、Antigravity CLI 和 DSH；Mesh 只决定谁来做哪一步，并让交接过程可检查。
 
 ```
-目标 ──► 实现（Claude Code） ──► 审查（Codex） ──► 验证（DSH，可选）
+目标 ──► 实现（Codex） ──► 审查（Claude Code） ──► 验证（DSH，可选）
               │                       │
               └── diff + 摘要 ────────┘
 ```
@@ -83,7 +83,7 @@ mesh init                          在缺失时创建 mesh.json 和 prompts/
 `run` / `retry` 的选项：
 
 ```text
---workflow <name>    工作流名称（默认：implement-review）
+--workflow <name>    工作流名称（默认：codex-implement-claude-review）
 --workspace <path>   要操作的工作区（默认：当前目录）
 --run-id <id>        继续一个已有 run id
 --resume             配合 --run-id：复用已完成的步骤，只重跑失败/取消的步骤
@@ -101,18 +101,17 @@ mesh init                          在缺失时创建 mesh.json 和 prompts/
 
 ## 工作流
 
-默认的 `implement-review`：
+默认的 `codex-implement-claude-review`：
 
-1. **implement** — Claude Code 修改工作区。
-2. **review** — Codex 检查工作区和 diff，按严重级别报告问题。
+1. **implement** — Codex 修改工作区。
+2. **review** — Claude Code 检查工作区和 diff，按严重级别报告问题。
 
-`implement-review-verify` 会在后面再加一个 DSH 验证步骤，运行测试/构建命令并报告失败。
+想要反过来（Claude 实现、Codex 审查），用 `--workflow implement-review`；`implement-review-verify` 会在审查后再加一个 DSH 验证步骤，运行测试/构建命令并报告失败。
 
 另外两个内置工作流：
 
 - `research-implement-review` — 先调研（默认走 Antigravity 的 `research` 能力），再实现，最后审查。
 - `debug-fix-verify` — Codex 先定位根因，Claude 做最小修复，DSH 复跑测试验证。
-- `codex-implement-claude-review` — Codex 实现、Claude 审查（默认工作流的角色对调）。
 
 工作流就是 `mesh.json` 里的数据：
 

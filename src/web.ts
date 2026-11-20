@@ -160,7 +160,7 @@ async function createRun(request: IncomingMessage, response: ServerResponse, wor
   try {
     started = startBackgroundRun({
       goal,
-      workflow: String(body.workflow ?? "implement-review"),
+      workflow: String(body.workflow ?? "codex-implement-claude-review"),
       workspace,
       dryRun: body.dry_run === true,
       maxCostUsd: Number.isFinite(maxCost) && maxCost > 0 ? maxCost : undefined,

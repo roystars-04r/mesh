@@ -44,12 +44,12 @@ const TOOLS = [
   {
     name: "mesh_run",
     description:
-      "Start a local multi-agent workflow in the background. Returns immediately with a run id; use mesh_status to poll and mesh_logs to follow progress. Default workflow: implement-review (Claude implements, Codex reviews).",
+      "Start a local multi-agent workflow in the background. Returns immediately with a run id; use mesh_status to poll and mesh_logs to follow progress. Default workflow: codex-implement-claude-review (Codex implements, Claude reviews).",
     inputSchema: {
       type: "object",
       properties: {
         goal: { type: "string", description: "What should be built or changed" },
-        workflow: { type: "string", description: "Workflow name from mesh.json (default implement-review)" },
+        workflow: { type: "string", description: "Workflow name from mesh.json (default codex-implement-claude-review)" },
         workspace: { type: "string", description: "Absolute workspace path (defaults to the MCP server cwd)" },
         dry_run: { type: "boolean", description: "Use the local mock agent (no model calls)" },
         max_cost_usd: { type: "number", description: "Stop before the next step once the run costs more than this" },
@@ -174,7 +174,7 @@ function handleTool(name: string, args: Record<string, unknown>): unknown {
       if (!existsSync(join(workspace, "mesh.json"))) throw new Error(`no mesh.json in ${workspace}`);
       const started = startBackgroundRun({
         goal,
-        workflow: String(args.workflow ?? "implement-review"),
+        workflow: String(args.workflow ?? "codex-implement-claude-review"),
         workspace,
         dryRun: args.dry_run === true,
         maxCostUsd: typeof args.max_cost_usd === "number" ? args.max_cost_usd : undefined,

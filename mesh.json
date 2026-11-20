@@ -91,6 +91,23 @@
     }
   },
   "workflows": {
+    "codex-implement-claude-review": {
+      "steps": [
+        {
+          "id": "implement",
+          "agent": "codex",
+          "promptFile": "prompts/implement.md"
+        },
+        {
+          "id": "review",
+          "agent": "claude",
+          "needs": [
+            "implement"
+          ],
+          "promptFile": "prompts/review.md"
+        }
+      ]
+    },
     "implement-review": {
       "steps": [
         {
@@ -180,23 +197,6 @@
             "fix"
           ],
           "promptFile": "prompts/verify.md"
-        }
-      ]
-    },
-    "codex-implement-claude-review": {
-      "steps": [
-        {
-          "id": "implement",
-          "agent": "codex",
-          "promptFile": "prompts/implement.md"
-        },
-        {
-          "id": "review",
-          "agent": "claude",
-          "needs": [
-            "implement"
-          ],
-          "promptFile": "prompts/review.md"
         }
       ]
     }
