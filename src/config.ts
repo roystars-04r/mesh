@@ -12,7 +12,7 @@ export function configPath(workspace: string): string {
 export function loadConfig(workspace: string): MeshConfig {
   const path = configPath(workspace);
   if (!existsSync(path)) {
-    throw new Error(`mesh.json not found in ${resolve(workspace)}. Run "mesh init" or create one.`);
+    throw new Error(`mesh.json not found in ${resolve(workspace)}. Run "mesh init" here, cd into a project that has mesh.json, or pass --workspace <path>.`);
   }
   let parsed: unknown;
   try {
