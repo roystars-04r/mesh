@@ -1,6 +1,7 @@
 # Mesh
 
 [![CI](https://github.com/roystars-04r/mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/roystars-04r/mesh/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/mesh-orchestrator?color=cb3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/mesh-orchestrator) [![npm downloads](https://img.shields.io/npm/dm/mesh-orchestrator?color=cb3837)](https://www.npmjs.com/package/mesh-orchestrator) [![node](https://img.shields.io/node/v/mesh-orchestrator?color=5fa04e&logo=node.js&logoColor=white)](package.json) [![runtime deps](https://img.shields.io/badge/runtime%20deps-0-brightgreen)](package.json) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/roystars-04r/mesh/pulls) [![GitHub stars](https://img.shields.io/github/stars/roystars-04r/mesh?style=social)](https://github.com/roystars-04r/mesh/stargazers)
 
 [English](README.en.md) | **简体中文**
 
