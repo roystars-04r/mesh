@@ -1,3 +1,5 @@
+**English** | [简体中文](README.zh-CN.md)
+
 # Mesh
 
 Mesh is a local orchestrator for coding agents you already have installed. It routes a goal through a small workflow, gives each agent a clean workspace, and passes structured artifacts between steps.
