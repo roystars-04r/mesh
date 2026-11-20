@@ -1,48 +1,48 @@
-**English** | [简体中文](README.zh-CN.md)
-
 # Mesh
 
-Mesh is a local orchestrator for coding agents you already have installed. It routes a goal through a small workflow, gives each agent a clean workspace, and passes structured artifacts between steps.
+[English](README.en.md) | **简体中文**
 
-It is **not** a marketplace, a chat room, or a new agent runtime. The agents stay Claude Code, Codex, Antigravity CLI, and DSH; Mesh decides who does what and keeps the handoff inspectable.
+Mesh 是一个本地编排器，用来调度你机器上已经装好的编码 Agent。它把一个目标拆成一个小型工作流，为每个 Agent 准备干净的工作区，并在步骤之间传递结构化产物。
+
+它**不是**任务市场、聊天室，也不是新的 Agent 运行时。执行任务的仍然是 Claude Code、Codex、Antigravity CLI 和 DSH；Mesh 只决定谁来做哪一步，并让交接过程可检查。
 
 ```
-goal ──► implement (Claude Code) ──► review (Codex) ──► verify (DSH, optional)
-              │                         │
-              └── diff + summary ───────┘
+目标 ──► 实现（Claude Code） ──► 审查（Codex） ──► 验证（DSH，可选）
+              │                       │
+              └── diff + 摘要 ────────┘
 ```
 
-## Why
+## 为什么需要它
 
-Each CLI is strong at different work:
+每个 CLI 擅长的方向不同：
 
-| Agent | Best at | Adapter |
+| Agent | 擅长 | 适配方式 |
 |---|---|---|
-| Claude Code | implementation, refactors, frontend, long tasks | `claude -p --output-format stream-json` |
-| Codex | review, debugging, tests, backend | `codex exec --json --sandbox workspace-write --skip-git-repo-check` |
-| Antigravity | research, long context, docs, multimodal | `agy -p --output-format stream-json --mode accept-edits` |
-| DSH | verification, tool use, execution | `npm exec --yes --package=@deepseek-ai/dsh -- dsh headless --json` |
+| Claude Code | 实现、重构、前端、长任务 | `claude -p --output-format stream-json` |
+| Codex | 审查、调试、测试、后端 | `codex exec --json --sandbox workspace-write --skip-git-repo-check` |
+| Antigravity | 调研、长上下文、文档、多模态 | `agy -p --output-format stream-json --mode accept-edits` |
+| DSH | 验证、工具调用、执行 | `npm exec --yes --package=@deepseek-ai/dsh -- dsh headless --json` |
 
-Mesh uses those strengths in sequence instead of asking one agent to do everything.
+Mesh 按顺序利用这些长处，而不是让一个 Agent 包办所有事情。
 
-## Requirements
+## 环境要求
 
-- Node.js 24+ (Mesh uses native TypeScript execution and `node:sqlite`)
-- At least one agent CLI on `PATH`
-- Git (optional, but recommended; it enables isolated worktrees and cleaner diffs)
+- Node.js 24+（Mesh 直接运行 TypeScript，并使用内置的 `node:sqlite`）
+- 至少一个 Agent CLI 在 `PATH` 中
+- Git（可选，但推荐；有 Git 才能使用隔离 worktree 和更干净的 diff）
 
-Checked locally with: `claude 2.1.325`, `codex 0.164.0`, `agy 1.5.5`, `dsh 0.2.2-rc.1`.
+本机验证过的版本：`claude 2.1.325`、`codex 0.164.0`、`agy 1.5.5`、`dsh 0.2.2-rc.1`。
 
-## Quick start
+## 快速开始
 
 ```bash
 cd /path/to/your/project
-node /path/to/mesh/src/cli.ts init      # creates mesh.json and prompts/
+node /path/to/mesh/src/cli.ts init      # 创建 mesh.json 和 prompts/
 node /path/to/mesh/src/cli.ts doctor
-node /path/to/mesh/src/cli.ts run "Add cursor pagination to /api/items"
+node /path/to/mesh/src/cli.ts run "给 /api/items 加上游标分页"
 ```
 
-For convenience, link it once:
+想少打点字，可以全局链接一次：
 
 ```bash
 cd /path/to/mesh
@@ -50,50 +50,50 @@ npm link
 mesh doctor
 ```
 
-`mesh run` is synchronous and prints step progress. Use `--verbose` to stream agent text.
+`mesh run` 是同步执行的，会打印每一步的进度。加 `--verbose` 可以实时看到 Agent 的输出。
 
-### Try it without spending tokens
+### 不花 token 试跑
 
 ```bash
 mesh run "smoke test" --dry-run --verbose
 ```
 
-Every agent is replaced by `test/fixtures/mock-agent.mjs`. This exercises workspace preparation, prompt rendering, event capture, diffs, and SQLite persistence without calling a model.
+`--dry-run` 会把所有 Agent 替换成 `test/fixtures/mock-agent.mjs`。它仍然会完整走一遍工作区准备、提示词渲染、事件捕获、diff 和 SQLite 持久化，但不会调用模型。
 
-## Commands
-
-```text
-mesh doctor                         Check Node, git, config, and agent CLIs
-mesh agents                         List configured agents and capabilities
-mesh run <goal> [options]           Run a workflow
-mesh status [run_id]                Show a run or recent runs
-mesh logs <run_id> [--step id]      Print the event log
-mesh mcp                            Start the MCP server on stdio
-mesh init                           Create mesh.json and prompts/ if missing
-```
-
-Run options:
+## 命令
 
 ```text
---workflow <name>    Workflow name (default: implement-review)
---workspace <path>   Workspace to operate on (default: current directory)
---run-id <id>        Reuse a run id
---dry-run            Replace agents with the local mock
---verbose            Stream agent text
---quiet              Only errors and the final summary
---json               Machine-readable result
+mesh doctor                        检查 Node、git、配置和 Agent CLI
+mesh agents                        列出已配置的 Agent 和能力
+mesh run <goal> [options]          运行一个工作流
+mesh status [run_id]               查看某次运行或最近几次运行
+mesh logs <run_id> [--step id]     打印事件日志
+mesh mcp                           在 stdio 上启动 MCP server
+mesh init                          在缺失时创建 mesh.json 和 prompts/
 ```
 
-## Workflows
+`run` 的选项：
 
-The default `implement-review`:
+```text
+--workflow <name>    工作流名称（默认：implement-review）
+--workspace <path>   要操作的工作区（默认：当前目录）
+--run-id <id>        复用已有 run id
+--dry-run            用本地 mock 替代 Agent
+--verbose            实时输出 Agent 文本
+--quiet              只输出错误和最终摘要
+--json               输出机器可读的结果
+```
 
-1. **implement** — Claude Code edits the workspace.
-2. **review** — Codex inspects the workspace and the diff, and reports findings by severity.
+## 工作流
 
-`implement-review-verify` adds a DSH verification step that runs tests/build commands and reports failures.
+默认的 `implement-review`：
 
-Workflows are data in `mesh.json`:
+1. **implement** — Claude Code 修改工作区。
+2. **review** — Codex 检查工作区和 diff，按严重级别报告问题。
+
+`implement-review-verify` 会在后面再加一个 DSH 验证步骤，运行测试/构建命令并报告失败。
+
+工作流就是 `mesh.json` 里的数据：
 
 ```json
 {
@@ -108,33 +108,33 @@ Workflows are data in `mesh.json`:
 }
 ```
 
-Steps form a DAG via `needs`. P0 executes steps sequentially in dependency order; the data model is ready for parallel branches.
+步骤通过 `needs` 组成 DAG。P0 会按依赖顺序串行执行；数据模型已经为并行分支留好了位置。
 
-## Prompt variables
+## 提示词变量
 
-Prompt files support:
+提示词文件支持：
 
-| Variable | Value |
+| 变量 | 含义 |
 |---|---|
-| `{{goal}}` | The user's goal |
-| `{{workspace}}` | The run's isolated workspace |
-| `{{run_id}}` | Run id |
-| `{{step_id}}` | Step id |
-| `{{diff}}` | Current diff (empty until a step changes files) |
-| `{{source_root}}` | Original project directory |
+| `{{goal}}` | 用户给出的目标 |
+| `{{workspace}}` | 本次运行的隔离工作区 |
+| `{{run_id}}` | 运行 id |
+| `{{step_id}}` | 步骤 id |
+| `{{diff}}` | 当前 diff（在步骤修改文件之前为空） |
+| `{{source_root}}` | 原始项目目录 |
 
-## How a run works
+## 一次运行发生了什么
 
-1. Mesh loads `mesh.json`, validates the workflow, and creates `.mesh/runs/<run_id>/`.
-2. It prepares an isolated workspace:
-   - if the project is a git repo **and** `mesh.json` is committed, it creates a detached worktree from `HEAD`;
-   - otherwise it copies the project, excluding `.mesh/`, `.git/`, and `node_modules/`.
-3. Each step gets a rendered prompt at `.mesh/runs/<run_id>/prompts/<step>.md`.
-4. Agent stdout is parsed as NDJSON when possible and stored in `.mesh/mesh.db` and `events.ndjson`.
-5. The final text, raw events, stderr, and a diff are stored under `.mesh/runs/<run_id>/`.
-6. Mesh never commits, pushes, deploys, or deletes the original workspace.
+1. Mesh 读取 `mesh.json`，校验工作流，并创建 `.mesh/runs/<run_id>/`。
+2. 准备隔离工作区：
+   - 如果项目是 Git 仓库，**并且** `mesh.json` 已经提交，就从 `HEAD` 创建一个 detached worktree；
+   - 否则复制一份项目，排除 `.mesh/`、`.git/` 和 `node_modules/`。
+3. 每一步的提示词渲染后写到 `.mesh/runs/<run_id>/prompts/<step>.md`。
+4. Agent 的 stdout 会尽量按 NDJSON 解析，并写入 `.mesh/mesh.db` 和 `events.ndjson`。
+5. 最终文本、原始事件、stderr 和 diff 都保存在 `.mesh/runs/<run_id>/` 下。
+6. Mesh 不会 commit、push、deploy，也不会删除原始工作区。
 
-Artifacts:
+产物结构：
 
 ```
 .mesh/runs/<run_id>/
@@ -146,40 +146,40 @@ Artifacts:
   workspace/
 ```
 
-The control plane lives in `.mesh/mesh.db` (SQLite, WAL mode). Add `.mesh/` to `.gitignore`. If you delete `.mesh/` while worktree runs exist, also run `git worktree prune`.
+控制面数据在 `.mesh/mesh.db`（SQLite，WAL 模式）。记得把 `.mesh/` 加进 `.gitignore`。如果删除 `.mesh/` 时还有 worktree 运行记录，之后执行一次 `git worktree prune`。
 
 ## MCP
 
-`mesh mcp` speaks JSON-RPC over stdio and exposes:
+`mesh mcp` 通过 stdio 提供 JSON-RPC 接口，暴露四个工具：
 
-| Tool | Purpose |
+| 工具 | 用途 |
 |---|---|
-| `mesh_run` | Start a workflow in the background; returns a run id |
-| `mesh_status` | Show a run, steps, and artifacts |
-| `mesh_agents` | List configured agents |
-| `mesh_artifacts` | List a run's artifacts |
+| `mesh_run` | 在后台启动一个工作流，返回 run id |
+| `mesh_status` | 查看某次运行的步骤和产物 |
+| `mesh_agents` | 列出已配置的 Agent |
+| `mesh_artifacts` | 列出某次运行的产物 |
 
-Register it with Claude Code:
+在 Claude Code 中注册：
 
 ```bash
 claude mcp add mesh -- node /path/to/mesh/src/cli.ts mcp
 ```
 
-For Codex, add a stdio MCP server entry pointing at the same command. For Antigravity, add a stdio MCP server through `agy mcp add` with the same `node .../src/cli.ts mcp` command.
+Codex 添加一个指向同一命令的 stdio MCP server 即可。Antigravity 可以用 `agy mcp add` 添加同一个 `node .../src/cli.ts mcp` 命令。
 
-This lets an agent delegate a scoped job to another agent without leaving its own session:
+这样 Agent 不用离开自己的会话，就能把一段有边界的工作委派出去：
 
 ```
-Use mesh_run with goal "fix the failing pagination test", then poll mesh_status.
+用 mesh_run 启动目标“修复分页测试失败”，然后轮询 mesh_status。
 ```
 
-## Configuration
+## 配置
 
-`mesh.json` has two top-level objects: `agents` and `workflows`.
+`mesh.json` 顶层只有两个对象：`agents` 和 `workflows`。
 
-Gemini Code Assist for individuals is no longer supported by Google. Mesh therefore uses Antigravity (`agy`), the migration path Google names. If you have a Gemini API key, you can add a `gemini` agent back manually with `GEMINI_API_KEY` in its environment.
+Google 已经停止支持面向个人的 Gemini Code Assist，因此 Mesh 默认使用 Antigravity（`agy`），这也是 Google 指定的迁移路径。如果你有 Gemini API key，可以手动把 `gemini` Agent 加回来，并在环境中提供 `GEMINI_API_KEY`。
 
-`dsh` is launched through npm (`npm exec --yes --package=@deepseek-ai/dsh -- dsh`) so it works even when the package is only installed in the npm/npx cache. Set `versionArgs` when the CLI's version flag is not a plain `--version`, as the DSH entry does.
+`dsh` 通过 npm 启动（`npm exec --yes --package=@deepseek-ai/dsh -- dsh`），所以即使包只存在于 npm/npx 缓存里也能用。如果某个 CLI 的版本参数不是普通的 `--version`，用 `versionArgs` 覆盖，DSH 的配置就是例子。
 
 ### Agent
 
@@ -194,16 +194,16 @@ Gemini Code Assist for individuals is no longer supported by Google. Mesh theref
 }
 ```
 
-`prompt` modes:
+`prompt` 的模式：
 
-- `arg` — append the prompt as the last argument.
-- `stdin` — write the prompt to stdin.
-- `arg-template` — substitute `{{prompt}}` inside `args`; useful for CLIs that need `-p "..."`.
-- `none` — no prompt.
+- `arg` — 把提示词作为最后一个参数追加。
+- `stdin` — 把提示词写入 stdin。
+- `arg-template` — 替换 `args` 里的 `{{prompt}}`；适合必须写 `-p "..."` 的 CLI。
+- `none` — 不传提示词。
 
-`args` also supports `{{workspace}}`, `{{goal}}`, `{{run_id}}`, and `{{step_id}}`.
+`args` 里也支持 `{{workspace}}`、`{{goal}}`、`{{run_id}}` 和 `{{step_id}}`。
 
-### Workflow step
+### 工作流步骤
 
 ```json
 {
@@ -214,31 +214,31 @@ Gemini Code Assist for individuals is no longer supported by Google. Mesh theref
 }
 ```
 
-`prompt` can be used instead of `promptFile` for small workflows.
+小工作流可以直接用 `prompt` 代替 `promptFile`。
 
-## Safety defaults
+## 安全默认值
 
-- Local only; no server, no telemetry, no cloud calls from Mesh itself.
-- Agents run in a copied workspace or a detached worktree, never the original.
-- No `--dangerously-skip-permissions` or equivalent in the default config.
-- Prompts tell agents not to commit, push, deploy, or print secrets.
-- The CLI has no destructive commands; deleting `.mesh/` is left to the user.
-- Agent CLIs may still ask for approval or need authentication. Mesh does not bypass their permission systems.
+- 纯本地；Mesh 本身没有服务器、没有遥测、不主动上云。
+- Agent 在复制的工作区或 detached worktree 里运行，永远不直接动原始目录。
+- 默认配置里没有 `--dangerously-skip-permissions` 之类的绕过参数。
+- 提示词会要求 Agent 不 commit、不 push、不 deploy、不打印密钥。
+- CLI 没有破坏性命令；删除 `.mesh/` 由用户自己决定。
+- Agent CLI 仍可能要求审批或登录；Mesh 不会绕过它们自己的权限系统。
 
-If a CLI blocks on an interactive prompt, run its one-time login/trust flow first, then re-run Mesh with `--verbose` to see where it stopped.
+如果某个 CLI 卡在交互式提示上，先单独跑一次它的登录/信任流程，再用 `--verbose` 重跑 Mesh，看它停在哪一步。
 
-Codex needs a writable `CODEX_HOME` (usually `~/.codex`). In a heavily sandboxed agent environment it may fail with `failed to initialize in-process app-server client: Operation not permitted`; run Mesh from a normal terminal or point `CODEX_HOME` at a writable profile.
+Codex 需要可写的 `CODEX_HOME`（通常是 `~/.codex`）。在限制很严的沙箱里，它可能报 `failed to initialize in-process app-server client: Operation not permitted`；换到普通终端运行 Mesh，或把 `CODEX_HOME` 指向一个可写的 profile。
 
-## Current limitations
+## 当前限制
 
-- P0 runs steps sequentially; parallel branches are not scheduled yet.
-- Token/cost accounting is not implemented.
-- Approval gates are prompt-level, not cryptographic.
-- The MCP `mesh_run` is fire-and-forget; poll `mesh_status`.
-- Agent output formats differ; Mesh extracts text heuristically and always keeps raw stdout/stderr.
-- The `dsh` adapter assumes `dsh headless` is configured and authenticated in the current environment. Set `DSH_HOME` in `mesh.json` `env` if you use a non-default profile.
+- P0 串行执行步骤，还没有并行分支调度。
+- 没有 token/成本统计。
+- 审批是提示词级别的，不是密码学级别的。
+- MCP 的 `mesh_run` 是 fire-and-forget；需要自己轮询 `mesh_status`。
+- 各 Agent 的输出格式不同；Mesh 用启发式规则提取文本，但始终保留原始 stdout/stderr。
+- `dsh` 适配器假设当前环境已经配置并登录了 `dsh headless`。如果使用非默认 profile，在 `mesh.json` 的 `env` 里设置 `DSH_HOME`。
 
-## Development
+## 开发
 
 ```bash
 node --test test/*.test.ts
@@ -246,13 +246,13 @@ node src/cli.ts doctor
 node src/cli.ts run "smoke test" --dry-run --verbose
 ```
 
-No build step and no runtime npm dependencies. TypeScript is executed directly by Node 24; `tsconfig.json` is for editors/type checking.
+没有构建步骤，也没有运行时 npm 依赖。TypeScript 由 Node 24 直接执行；`tsconfig.json` 只用于编辑器和类型检查。
 
-## Roadmap
+## 路线图
 
-- Parallel DAG execution and per-step worktrees
-- Capability-based routing and fallback (`coding` → Claude, `review` → Codex)
-- Token/cost budgets and per-run limits
-- Interactive approval gate for destructive steps
-- More workflows: `research-implement-review`, `debug-fix-verify`
-- Web dashboard over `.mesh/mesh.db`
+- 并行 DAG 执行和每步独立 worktree
+- 基于能力的路由和回退（`coding` → Claude，`review` → Codex）
+- token/成本预算和单次运行限额
+- 破坏性步骤的交互式审批门
+- 更多工作流：`research-implement-review`、`debug-fix-verify`
+- 基于 `.mesh/mesh.db` 的 Web 面板
