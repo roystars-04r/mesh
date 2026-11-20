@@ -1,5 +1,7 @@
 # Mesh
 
+[![CI](https://github.com/roystars-04r/mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/roystars-04r/mesh/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **English** | [简体中文](README.md)
 
 Mesh is a local orchestrator for the coding agents you already have installed. It splits a goal into a small workflow, gives each agent a clean workspace, and passes structured artifacts between steps.
@@ -342,3 +344,7 @@ node src/cli.ts run "smoke test" --dry-run --verbose
 No build step and no runtime npm dependencies. Node 24 executes the TypeScript directly; `tsconfig.json` is only for editors and type checking.
 
 Tests cover config validation and DAG ordering, four agent event formats, SQLite persistence, worktree/diff, cancel, resume, approvals, budgets, parallel merges, capability fallback, apply, clean, stats, MCP tools, and web start/cancel/SSE.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

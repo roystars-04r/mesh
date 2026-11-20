@@ -1,5 +1,7 @@
 # Mesh
 
+[![CI](https://github.com/roystars-04r/mesh/actions/workflows/ci.yml/badge.svg)](https://github.com/roystars-04r/mesh/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 [English](README.en.md) | **简体中文**
 
 Mesh 是一个本地编排器，用来调度你机器上已经装好的编码 Agent。它把一个目标拆成一个小型工作流，为每个 Agent 准备干净的工作区，并在步骤之间传递结构化产物。
@@ -343,3 +345,7 @@ node src/cli.ts run "smoke test" --dry-run --verbose
 没有构建步骤，也没有运行时 npm 依赖。TypeScript 由 Node 24 直接执行；`tsconfig.json` 只用于编辑器和类型检查。
 
 测试覆盖：配置校验与 DAG 排序、四种 Agent 事件格式、SQLite 持久化、worktree/diff、取消、恢复、审批、预算、并行合并、能力回退、apply、clean、stats、MCP 工具、Web 启动/取消/SSE。
+
+## 许可
+
+MIT，见 [LICENSE](LICENSE)。
