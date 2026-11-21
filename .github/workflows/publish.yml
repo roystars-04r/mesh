@@ -22,7 +22,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           cache: npm
 
       - name: Install dev dependencies
@@ -33,7 +32,7 @@ jobs:
 
       # --ignore-scripts: build/test already ran above, skip the prepublishOnly rerun.
       # --provenance: sign the tarball via GitHub OIDC (id-token: write above).
+      # Trusted publishing: no NODE_AUTH_TOKEN. npm exchanges the GitHub OIDC token
+      # for a short-lived credential, so the NPM_TOKEN secret is no longer used.
       - name: Publish with provenance
         run: npm publish --provenance --access public --ignore-scripts
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
